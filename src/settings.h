@@ -2,14 +2,14 @@
 
 //########################## MODULES #################################
 #define MDNS_ENABLE                 // When enabled, you don't have to handle with Tonuino's IP-address. If hostname is set to "tonuino", you can reach it via tonuino.local
-#define MQTT_ENABLE                 // Make sure to configure mqtt-server and (optionally) username+pwd
+//#define MQTT_ENABLE                 // Make sure to configure mqtt-server and (optionally) username+pwd
 #define FTP_ENABLE                  // Enables FTP-server
-#define NEOPIXEL_ENABLE             // Don't forget configuration of NUM_LEDS if enabled
-#define NEOPIXEL_REVERSE_ROTATION   // Some Neopixels are adressed/soldered counter-clockwise. This can be configured here.
+//#define NEOPIXEL_ENABLE             // Don't forget configuration of NUM_LEDS if enabled
+//#define NEOPIXEL_REVERSE_ROTATION   // Some Neopixels are adressed/soldered counter-clockwise. This can be configured here.
 #define LANGUAGE 1                  // 1 = deutsch; 2 = english
 //#define HEADPHONE_ADJUST_ENABLE     // Used to adjust (lower) volume for optional headphone-pcb (refer maxVolumeSpeaker / maxVolumeHeadphone)
 #define SHUTDOWN_IF_SD_BOOT_FAILS   // Will put ESP to deepsleep if boot fails due to SD. Really recommend this if there's in battery-mode no other way to restart ESP! Interval adjustable via deepsleepTimeAfterBootFails.
-#define MEASURE_BATTERY_VOLTAGE     // Enables battery-measurement via GPIO (ADC) and voltage-divider
+//#define MEASURE_BATTERY_VOLTAGE     // Enables battery-measurement via GPIO (ADC) and voltage-divider
 //#define PLAY_LAST_RFID_AFTER_REBOOT // When restarting Tonuino, the last RFID that was active before, is recalled and played
 
 //#define SINGLE_SPI_ENABLE         // If only one SPI-instance should be used instead of two (not yet working!)
@@ -35,10 +35,10 @@
     //  MISO    2   // hardware pullup may required
 #else
     // uSD-card-reader (if SPI is used; these GPIOs can be changed)
-    #define SPISD_CS                        15          // GPIO for chip select (SD)
+    #define SPISD_CS                        13          // GPIO for chip select (SD)
     #ifndef SINGLE_SPI_ENABLE
-        #define SPISD_MOSI                  13          // GPIO for master out slave in (SD) => not necessary for single-SPI
-        #define SPISD_MISO                  16          // GPIO for master in slave ou (SD) => not necessary for single-SPI
+        #define SPISD_MOSI                  15          // GPIO for master out slave in (SD) => not necessary for single-SPI
+        #define SPISD_MISO                  2          // GPIO for master in slave ou (SD) => not necessary for single-SPI
         #define SPISD_SCK                   14          // GPIO for clock-signal (SD) => not necessary for single-SPI
     #endif
 #endif
@@ -64,10 +64,10 @@
 #define DREHENCODER_DT                  35          // Info: Lolin D32 / Lolin D32 pro 35 are using 35 for battery-voltage-monitoring!
 #define DREHENCODER_BUTTON              32          // Button is used to switch Tonuino on and off
 
-// Control-buttons
-#define PAUSEPLAY_BUTTON                5           // GPIO to detect pause/play
-#define NEXT_BUTTON                     4           // GPIO to detect next
-#define PREVIOUS_BUTTON                 2           // GPIO to detect previous (Important: as of 19.11.2020 changed from 33 to 2)
+// GPIOs (Control-buttons)
+#define PAUSEPLAY_BUTTON                5
+#define NEXT_BUTTON                     4
+#define PREVIOUS_BUTTON                 33           // Please note: as of 19.11.2020 changed from 33 to 2
 
 // (optional) Power-control
 #define POWER                           17          // GPIO used to drive transistor-circuit, that switches off peripheral devices while ESP32-deepsleep

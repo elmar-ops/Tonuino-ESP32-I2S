@@ -1734,7 +1734,7 @@ void playAudio(void *parameter) {
 void rfidScanner(void *parameter) {
     static MFRC522 mfrc522(RFID_CS, RST_PIN);
     #ifndef SINGLE_SPI_ENABLE
-        SPI.begin();
+        SPI.begin(RFID_SCK, RFID_MISO, RFID_MOSI);
     #endif
     mfrc522.PCD_Init();
     mfrc522.PCD_DumpVersionToSerial();  // Show details of PCD - MFRC522 Card Reader detail
