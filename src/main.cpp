@@ -702,12 +702,12 @@ void doButtonActions(void) {
                     switch (i)      // Long-press-actions
                     {
                     case 0:
-                        trackControlToQueueSender(LASTTRACK);
+                        trackControlToQueueSender(NEXTTRACK);
                         buttons[i].isPressed = false;
                         break;
 
                     case 1:
-                        trackControlToQueueSender(FIRSTTRACK);
+                        trackControlToQueueSender(PREVIOUSTRACK);
                         buttons[i].isPressed = false;
                         break;
 
@@ -724,12 +724,20 @@ void doButtonActions(void) {
                     switch (i)      // Short-press-actions
                     {
                     case 0:
-                        trackControlToQueueSender(NEXTTRACK);
+                        if (currentVolume < maxVolume) {
+                          currentVolume++;
+                          volumeToQueueSender(currentVolume);
+                        }
+                        //trackControlToQueueSender(NEXTTRACK);
                         buttons[i].isPressed = false;
                         break;
 
                     case 1:
-                        trackControlToQueueSender(PREVIOUSTRACK);
+                        if (currentVolume > 0) {
+                          currentVolume--;
+                          volumeToQueueSender(currentVolume);
+                          //trackControlToQueueSender(PREVIOUSTRACK);
+                        }
                         buttons[i].isPressed = false;
                         break;
 
@@ -1757,6 +1765,7 @@ void rfidScanner(void *parameter) {
             // Select one of the cards
             if (!mfrc522.PICC_ReadCardSerial()) {
                 continue;
+                //trackControlToQueueSender(PAUSEPLAY);
             }
 
             //mfrc522.PICC_DumpToSerial(&(mfrc522.uid));
