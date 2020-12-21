@@ -305,6 +305,7 @@ QueueHandle_t trackQueue;
 QueueHandle_t trackControlQueue;
 QueueHandle_t rfidCardQueue;
 
+char *prevCardIdString = strndup((char*) "0", cardIdSize); 
 
 // Prototypes
 void accessPointStart(const char *SSID, IPAddress ip, IPAddress netmask);
@@ -1759,13 +1760,19 @@ void rfidScanner(void *parameter) {
             // Reset the loop if no new card is present on the sensor/reader. This saves the entire process when idle.
 
             if (!mfrc522.PICC_IsNewCardPresent()) {
-                continue;
+                //Serial.println("no PICC_IsNewCardPresent");
+                continue;  
             }
 
             // Select one of the cards
             if (!mfrc522.PICC_ReadCardSerial()) {
+                Serial.println("no PICC_ReadCardSerial");
+                if (!playProperties.pausePlay)
+                {
+                    //trackControlToQueueSender(PAUSEPLAY);
+                    
+                }
                 continue;
-                //trackControlToQueueSender(PAUSEPLAY);
             }
 
             //mfrc522.PICC_DumpToSerial(&(mfrc522.uid));
@@ -1796,7 +1803,20 @@ void rfidScanner(void *parameter) {
                     logger("\n", LOGLEVEL_NOTICE);
                 }
             }
-            xQueueSend(rfidCardQueue, &cardIdString, 0);
+            
+            if (strcmp(cardIdString, prevCardIdString) == 0) {
+              Serial.print("Same Card ...");
+              if (playProperties.pausePlay)
+              {
+                trackControlToQueueSender(PAUSEPLAY);
+                Serial.println("...continue");
+              }
+            } else {
+              Serial.print("New Card ...");
+              prevCardIdString = (char *) malloc(cardIdSize*3 +1);
+              strcpy ( prevCardIdString, cardIdString );
+              xQueueSend(rfidCardQueue, &cardIdString, 0);
+            }
         }
     }
     vTaskDelete(NULL);
