@@ -305,7 +305,13 @@ QueueHandle_t trackQueue;
 QueueHandle_t trackControlQueue;
 QueueHandle_t rfidCardQueue;
 
+
+//Card detection
 char *prevCardIdString = strndup((char*) "0", cardIdSize); 
+bool rfid_tag_present_prev = false;
+bool rfid_tag_present = false;
+int _rfid_error_counter = 0;
+bool _tag_found = false;
 
 // Prototypes
 void accessPointStart(const char *SSID, IPAddress ip, IPAddress netmask);
@@ -1759,19 +1765,51 @@ void rfidScanner(void *parameter) {
             lastRfidCheckTimestamp = millis();
             // Reset the loop if no new card is present on the sensor/reader. This saves the entire process when idle.
 
+            rfid_tag_present_prev = rfid_tag_present;
+
+            _rfid_error_counter += 1;
+            if(_rfid_error_counter > 2){
+                _tag_found = false;
+            }
+
+            // Detect Tag without looking for collisions
+            byte bufferATQA[2];
+            byte bufferSize = sizeof(bufferATQA);
+
+            MFRC522::StatusCode result = mfrc522.PICC_RequestA(bufferATQA, &bufferSize);
+
+            if(result == mfrc522.STATUS_OK){
+                if ( ! mfrc522.PICC_ReadCardSerial()) { //Since a PICC placed get Serial and continue   
+                return;
+                }
+                _rfid_error_counter = 0;
+                _tag_found = true;        
+            }
+
+             rfid_tag_present = _tag_found;
+  
+            // rising edge
+            if (rfid_tag_present && !rfid_tag_present_prev){
+                //Serial.println("Tag found");
+            }
+            
+            // falling edge
+            if (!rfid_tag_present && rfid_tag_present_prev){
+                Serial.println("Tag gone");
+                if (!playProperties.pausePlay)
+                {
+                    trackControlToQueueSender(PAUSEPLAY);
+                    
+                }
+                continue;
+            }
+
             if (!mfrc522.PICC_IsNewCardPresent()) {
-                //Serial.println("no PICC_IsNewCardPresent");
                 continue;  
             }
 
             // Select one of the cards
             if (!mfrc522.PICC_ReadCardSerial()) {
-                Serial.println("no PICC_ReadCardSerial");
-                if (!playProperties.pausePlay)
-                {
-                    //trackControlToQueueSender(PAUSEPLAY);
-                    
-                }
                 continue;
             }
 
