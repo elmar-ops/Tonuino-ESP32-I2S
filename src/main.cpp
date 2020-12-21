@@ -308,10 +308,8 @@ QueueHandle_t rfidCardQueue;
 
 //Card detection
 char *prevCardIdString = strndup((char*) "0", cardIdSize); 
-bool rfid_tag_present_prev = false;
-bool rfid_tag_present = false;
-int _rfid_error_counter = 0;
-bool _tag_found = false;
+bool is_card_present = false;
+uint8_t control = 0x00;
 
 // Prototypes
 void accessPointStart(const char *SSID, IPAddress ip, IPAddress netmask);
@@ -1764,46 +1762,7 @@ void rfidScanner(void *parameter) {
         if ((millis() - lastRfidCheckTimestamp) >= RFID_SCAN_INTERVAL) {
             lastRfidCheckTimestamp = millis();
             // Reset the loop if no new card is present on the sensor/reader. This saves the entire process when idle.
-
-            rfid_tag_present_prev = rfid_tag_present;
-
-            _rfid_error_counter += 1;
-            if(_rfid_error_counter > 2){
-                _tag_found = false;
-            }
-
-            // Detect Tag without looking for collisions
-            byte bufferATQA[2];
-            byte bufferSize = sizeof(bufferATQA);
-
-            MFRC522::StatusCode result = mfrc522.PICC_RequestA(bufferATQA, &bufferSize);
-
-            if(result == mfrc522.STATUS_OK){
-                if ( ! mfrc522.PICC_ReadCardSerial()) { //Since a PICC placed get Serial and continue   
-                return;
-                }
-                _rfid_error_counter = 0;
-                _tag_found = true;        
-            }
-
-             rfid_tag_present = _tag_found;
   
-            // rising edge
-            if (rfid_tag_present && !rfid_tag_present_prev){
-                //Serial.println("Tag found");
-            }
-            
-            // falling edge
-            if (!rfid_tag_present && rfid_tag_present_prev){
-                Serial.println("Tag gone");
-                if (!playProperties.pausePlay)
-                {
-                    trackControlToQueueSender(PAUSEPLAY);
-                    
-                }
-                continue;
-            }
-
             if (!mfrc522.PICC_IsNewCardPresent()) {
                 continue;  
             }
@@ -1814,8 +1773,8 @@ void rfidScanner(void *parameter) {
             }
 
             //mfrc522.PICC_DumpToSerial(&(mfrc522.uid));
-            mfrc522.PICC_HaltA();
-            mfrc522.PCD_StopCrypto1();
+            //mfrc522.PICC_HaltA();
+            //mfrc522.PCD_StopCrypto1();
 
             cardIdString = (char *) malloc(cardIdSize*3 +1);
             if (cardIdString == NULL) {
@@ -1843,7 +1802,7 @@ void rfidScanner(void *parameter) {
             }
             
             if (strcmp(cardIdString, prevCardIdString) == 0) {
-              Serial.print("Same Card ...");
+              Serial.println("Same Card ...");
               if (playProperties.pausePlay)
               {
                 trackControlToQueueSender(PAUSEPLAY);
@@ -1855,6 +1814,43 @@ void rfidScanner(void *parameter) {
               strcpy ( prevCardIdString, cardIdString );
               xQueueSend(rfidCardQueue, &cardIdString, 0);
             }
+
+            while(true){
+                esp_task_wdt_reset();
+                vTaskDelay(10);
+                control=0;
+                for(int i=0; i<3; i++){
+                    if(!mfrc522.PICC_IsNewCardPresent()){
+                        if(mfrc522.PICC_ReadCardSerial()){
+                        //Serial.print('a');
+                        control |= 0x16;
+                        }
+                        if(mfrc522.PICC_ReadCardSerial()){
+                        //Serial.print('b');
+                        control |= 0x16;
+                        }
+                        //Serial.print('c');
+                        control += 0x1;
+                    }
+                //Serial.print('d');
+                control += 0x4;
+                }
+                
+                //Serial.println(control);
+                if(control == 13 || control == 14){
+                  //card is still there
+                } else {
+                  break;
+                }
+            }
+            Serial.println("CardRemoved");
+            if (!playProperties.pausePlay)
+            {
+              trackControlToQueueSender(PAUSEPLAY);
+              Serial.println("...continue");
+            }
+            mfrc522.PICC_HaltA();
+            mfrc522.PCD_StopCrypto1();
         }
     }
     vTaskDelete(NULL);
