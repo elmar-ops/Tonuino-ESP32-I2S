@@ -9,7 +9,7 @@
 #define LANGUAGE 1                  // 1 = deutsch; 2 = english
 //#define HEADPHONE_ADJUST_ENABLE     // Used to adjust (lower) volume for optional headphone-pcb (refer maxVolumeSpeaker / maxVolumeHeadphone)
 #define SHUTDOWN_IF_SD_BOOT_FAILS   // Will put ESP to deepsleep if boot fails due to SD. Really recommend this if there's in battery-mode no other way to restart ESP! Interval adjustable via deepsleepTimeAfterBootFails.
-//#define MEASURE_BATTERY_VOLTAGE     // Enables battery-measurement via GPIO (ADC) and voltage-divider
+#define MEASURE_BATTERY_VOLTAGE     // Enables battery-measurement via GPIO (ADC) and voltage-divider
 //#define PLAY_LAST_RFID_AFTER_REBOOT // When restarting Tonuino, the last RFID that was active before, is recalled and played
 
 //#define SINGLE_SPI_ENABLE         // If only one SPI-instance should be used instead of two (not yet working!)
@@ -82,7 +82,7 @@
 
 // (optional) Monitoring of battery-voltage via ADC
 #ifdef MEASURE_BATTERY_VOLTAGE
-    #define VOLTAGE_READ_PIN            33          // GPIO used to monitor battery-voltage. Change to 35 if you're using Lolin D32 or Lolin D32 pro as it's hard-wired there!
+    #define VOLTAGE_READ_PIN            35          // GPIO used to monitor battery-voltage. Change to 35 if you're using Lolin D32 or Lolin D32 pro as it's hard-wired there!
 #endif
 
 
@@ -138,8 +138,8 @@ float voltageIndicatorHigh = 4.2;                   // Upper range for Neopixel-
 
 // (optinal) For measuring battery-voltage a voltage-divider is necessary. Their values need to be configured here.
 #ifdef MEASURE_BATTERY_VOLTAGE
-    uint8_t rdiv1 = 129;                               // Rdiv1 of voltage-divider (kOhms) (measure exact value with multimeter!)
-    uint16_t rdiv2 = 389;                              // Rdiv2 of voltage-divider (kOhms) (measure exact value with multimeter!) => used to measure voltage via ADC!
+    uint8_t rdiv1 = 100;                               // Rdiv1 of voltage-divider (kOhms) (measure exact value with multimeter!)
+    uint16_t rdiv2 = 100;                              // Rdiv2 of voltage-divider (kOhms) (measure exact value with multimeter!) => used to measure voltage via ADC!
 #endif
 
 // (optinal) Headphone-detection (leave unchanged if in doubts...)
