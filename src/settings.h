@@ -16,7 +16,7 @@
 //#define BLUETOOTH_ENABLE          // Doesn't work currently (so don't enable) as there's not enough DRAM available
 
 //################## select SD card mode #############################
-//#define SD_MMC_1BIT_MODE          // run SD card in SD-MMC 1Bit mode => if not enabled, SPI is used as default
+#define SD_MMC_1BIT_MODE          // run SD card in SD-MMC 1Bit mode => if not enabled, SPI is used as default
 
 //################## select RFID reader ##############################
 // => make sure to enable only ONE reader at once!
