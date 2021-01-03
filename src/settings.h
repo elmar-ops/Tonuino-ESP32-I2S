@@ -13,7 +13,7 @@
 //#define PLAY_LAST_RFID_AFTER_REBOOT // When restarting Tonuino, the last RFID that was active before, is recalled and played
 
 //#define SINGLE_SPI_ENABLE         // If only one SPI-instance should be used instead of two (not yet working!)
-//#define BLUETOOTH_ENABLE          // Doesn't work currently (so don't enable) as there's not enough DRAM available
+#define BLUETOOTH_ENABLE          // Doesn't work currently (so don't enable) as there's not enough DRAM available
 
 //################## select SD card mode #############################
 #define SD_MMC_1BIT_MODE          // run SD card in SD-MMC 1Bit mode => if not enabled, SPI is used as default
