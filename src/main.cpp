@@ -1,7 +1,9 @@
 // !!! MAKE SURE TO EDIT settings.h !!!
 
 #include "settings.h"                       // Contains all user-relevant settings
-#include <ESP32Encoder.h>
+#ifdef USE_ENCODER
+    #include <ESP32Encoder.h>
+#endif
 #include "Arduino.h"
 #include <WiFi.h>
 #ifdef MDNS_ENABLE
@@ -218,9 +220,12 @@ unsigned long sleepTimerStartTimestamp = 0;             // Flag if sleep-timer i
 bool gotoSleep = false;                                 // Flag for turning uC immediately into deepsleep
 bool lockControls = false;                              // Flag if buttons and rotary encoder is locked
 bool bootComplete = false;
-// Rotary encoder-helper
-int32_t lastEncoderValue;
-int32_t currentEncoderValue;
+
+#ifdef USE_ENCODER
+    // Rotary encoder-helper
+    int32_t lastEncoderValue;
+    int32_t currentEncoderValue;
+#endif
 int32_t lastVolume = -1;                                // Don't change -1 as initial-value!
 uint8_t currentVolume = initVolume;
 ////////////
@@ -279,8 +284,10 @@ IPAddress myIP;
     PubSubClient MQTTclient(wifiClient);
 #endif
 
-// Rotary encoder-configuration
-ESP32Encoder encoder;
+#ifdef USE_ENCODER
+    // Rotary encoder-configuration
+    ESP32Encoder encoder;
+#endif
 
 // HW-Timer
 hw_timer_t *timer = NULL;
@@ -658,7 +665,9 @@ void buttonHandler() {
         buttons[0].currentState = digitalRead(NEXT_BUTTON);
         buttons[1].currentState = digitalRead(PREVIOUS_BUTTON);
         buttons[2].currentState = digitalRead(PAUSEPLAY_BUTTON);
-        buttons[3].currentState = digitalRead(DREHENCODER_BUTTON);
+        #ifdef USE_ENCODER
+            buttons[3].currentState = digitalRead(DREHENCODER_BUTTON);
+        #endif
 
         // Iterate over all buttons in struct-array
         for (uint8_t i=0; i < sizeof(buttons) / sizeof(buttons[0]); i++) {
@@ -708,6 +717,16 @@ void doButtonActions(void) {
             }
 
             if (operating_mode == WEBRADIO_MODE)
+            {
+                if (prefsSettings.putUChar("operating_mode", CONFIG_MODE))
+                {
+                  loggerNl((char *) FPSTR("CONFIG_MODE"), LOGLEVEL_NOTICE);
+                  delay(1000);
+                  ESP.restart();
+                }
+            }
+
+             if (operating_mode == CONFIG_MODE)
             {
                 if (prefsSettings.putUChar("operating_mode", TONUINO_MODE))
                 {
@@ -2437,39 +2456,39 @@ void trackControlToQueueSender(const uint8_t trackCommand) {
     xQueueSend(trackControlQueue, &trackCommand, 0);
 }
 
-
-// Handles volume directed by rotary encoder
-void volumeHandler(const int32_t _minVolume, const int32_t _maxVolume) {
-    if (lockControls) {
-        encoder.clearCount();
-        encoder.setCount(currentVolume*2);
-        return;
-    }
-
-    currentEncoderValue = encoder.getCount();
-    // Only if initial run or value has changed. And only after "full step" of rotary encoder
-    if (((lastEncoderValue != currentEncoderValue) || lastVolume == -1) && (currentEncoderValue % 2 == 0)) {
-        lastTimeActiveTimestamp = millis();        // Set inactive back if rotary encoder was used
-        if (_maxVolume * 2 < currentEncoderValue) {
+#ifdef USE_ENCODER
+    // Handles volume directed by rotary encoder
+    void volumeHandler(const int32_t _minVolume, const int32_t _maxVolume) {
+        if (lockControls) {
             encoder.clearCount();
-            encoder.setCount(_maxVolume * 2);
-            loggerNl((char *) FPSTR(maxLoudnessReached), LOGLEVEL_INFO);
-            currentEncoderValue = encoder.getCount();
-        } else if (currentEncoderValue < _minVolume) {
-            encoder.clearCount();
-            encoder.setCount(_minVolume);
-            loggerNl((char *) FPSTR(minLoudnessReached), LOGLEVEL_INFO);
-            currentEncoderValue = encoder.getCount();
+            encoder.setCount(currentVolume*2);
+            return;
         }
-        lastEncoderValue = currentEncoderValue;
-        currentVolume = lastEncoderValue / 2;
-        if (currentVolume != lastVolume) {
-            lastVolume = currentVolume;
-            volumeToQueueSender(currentVolume);
+
+        currentEncoderValue = encoder.getCount();
+        // Only if initial run or value has changed. And only after "full step" of rotary encoder
+        if (((lastEncoderValue != currentEncoderValue) || lastVolume == -1) && (currentEncoderValue % 2 == 0)) {
+            lastTimeActiveTimestamp = millis();        // Set inactive back if rotary encoder was used
+            if (_maxVolume * 2 < currentEncoderValue) {
+                encoder.clearCount();
+                encoder.setCount(_maxVolume * 2);
+                loggerNl((char *) FPSTR(maxLoudnessReached), LOGLEVEL_INFO);
+                currentEncoderValue = encoder.getCount();
+            } else if (currentEncoderValue < _minVolume) {
+                encoder.clearCount();
+                encoder.setCount(_minVolume);
+                loggerNl((char *) FPSTR(minLoudnessReached), LOGLEVEL_INFO);
+                currentEncoderValue = encoder.getCount();
+            }
+            lastEncoderValue = currentEncoderValue;
+            currentVolume = lastEncoderValue / 2;
+            if (currentVolume != lastVolume) {
+                lastVolume = currentVolume;
+                volumeToQueueSender(currentVolume);
+            }
         }
     }
-}
-
+#endif
 
 // Receives de-serialized RFID-data (from NVS) and dispatches playlists for the given
 // playmode to the track-queue.
@@ -3948,8 +3967,6 @@ void setup() {
         loggerNl((char *) FPSTR(wroteMaxLoudnessForSpeakerToNvs), LOGLEVEL_ERROR);
     }
 
-    
-
     #ifdef HEADPHONE_ADJUST_ENABLE
         // Get maximum volume for headphone from NVS
         uint32_t nvsMaxVolumeHeadphone = prefsSettings.getUInt("maxVolumeHp", 0);
@@ -3966,58 +3983,61 @@ void setup() {
     // Adjust volume depending on headphone is connected and volume-adjustment is enabled
     setupVolume();
 
-    // Get MQTT-enable from NVS
-    uint8_t nvsEnableMqtt = prefsSettings.getUChar("enableMQTT", 99);
-    switch (nvsEnableMqtt) {
-        case 99:
-            prefsSettings.putUChar("enableMQTT", enableMqtt);
-            loggerNl((char *) FPSTR(wroteMqttFlagToNvs), LOGLEVEL_ERROR);
-            break;
-        case 1:
-            //prefsSettings.putUChar("enableMQTT", enableMqtt);
-            enableMqtt = nvsEnableMqtt;
-            snprintf(logBuf, serialLoglength, "%s: %u", (char *) FPSTR(restoredMqttActiveFromNvs), nvsEnableMqtt);
+
+    #ifdef MQTT_ENABLE
+        // Get MQTT-enable from NVS
+        uint8_t nvsEnableMqtt = prefsSettings.getUChar("enableMQTT", 99);
+        switch (nvsEnableMqtt) {
+            case 99:
+                prefsSettings.putUChar("enableMQTT", enableMqtt);
+                loggerNl((char *) FPSTR(wroteMqttFlagToNvs), LOGLEVEL_ERROR);
+                break;
+            case 1:
+                //prefsSettings.putUChar("enableMQTT", enableMqtt);
+                enableMqtt = nvsEnableMqtt;
+                snprintf(logBuf, serialLoglength, "%s: %u", (char *) FPSTR(restoredMqttActiveFromNvs), nvsEnableMqtt);
+                loggerNl(logBuf, LOGLEVEL_INFO);
+                break;
+            case 0:
+                enableMqtt = nvsEnableMqtt;
+                snprintf(logBuf, serialLoglength, "%s: %u", (char *) FPSTR(restoredMqttDeactiveFromNvs), nvsEnableMqtt);
+                loggerNl(logBuf, LOGLEVEL_INFO);
+                break;
+        }
+
+        // Get MQTT-server from NVS
+        String nvsMqttServer = prefsSettings.getString("mqttServer", "-1");
+        if (!nvsMqttServer.compareTo("-1")) {
+            prefsSettings.putString("mqttServer", (String) mqtt_server);
+            loggerNl((char*) FPSTR(wroteMqttServerToNvs), LOGLEVEL_ERROR);
+        } else {
+            strncpy(mqtt_server, nvsMqttServer.c_str(), mqttServerLength);
+            snprintf(logBuf, serialLoglength, "%s: %s", (char *) FPSTR(restoredMqttServerFromNvs), nvsMqttServer.c_str());
             loggerNl(logBuf, LOGLEVEL_INFO);
-            break;
-        case 0:
-            enableMqtt = nvsEnableMqtt;
-            snprintf(logBuf, serialLoglength, "%s: %u", (char *) FPSTR(restoredMqttDeactiveFromNvs), nvsEnableMqtt);
+        }
+
+        // Get MQTT-user from NVS
+        String nvsMqttUser = prefsSettings.getString("mqttUser", "-1");
+        if (!nvsMqttUser.compareTo("-1")) {
+            prefsSettings.putString("mqttUser", (String) mqttUser);
+            loggerNl((char *) FPSTR(wroteMqttUserToNvs), LOGLEVEL_ERROR);
+        } else {
+            strncpy(mqttUser, nvsMqttUser.c_str(), mqttUserLength);
+            snprintf(logBuf, serialLoglength, "%s: %s", (char *) FPSTR(restoredMqttUserFromNvs), nvsMqttUser.c_str());
             loggerNl(logBuf, LOGLEVEL_INFO);
-            break;
-    }
+        }
 
-    // Get MQTT-server from NVS
-    String nvsMqttServer = prefsSettings.getString("mqttServer", "-1");
-    if (!nvsMqttServer.compareTo("-1")) {
-        prefsSettings.putString("mqttServer", (String) mqtt_server);
-        loggerNl((char*) FPSTR(wroteMqttServerToNvs), LOGLEVEL_ERROR);
-    } else {
-        strncpy(mqtt_server, nvsMqttServer.c_str(), mqttServerLength);
-        snprintf(logBuf, serialLoglength, "%s: %s", (char *) FPSTR(restoredMqttServerFromNvs), nvsMqttServer.c_str());
-        loggerNl(logBuf, LOGLEVEL_INFO);
-    }
-
-    // Get MQTT-user from NVS
-    String nvsMqttUser = prefsSettings.getString("mqttUser", "-1");
-    if (!nvsMqttUser.compareTo("-1")) {
-        prefsSettings.putString("mqttUser", (String) mqttUser);
-        loggerNl((char *) FPSTR(wroteMqttUserToNvs), LOGLEVEL_ERROR);
-    } else {
-        strncpy(mqttUser, nvsMqttUser.c_str(), mqttUserLength);
-        snprintf(logBuf, serialLoglength, "%s: %s", (char *) FPSTR(restoredMqttUserFromNvs), nvsMqttUser.c_str());
-        loggerNl(logBuf, LOGLEVEL_INFO);
-    }
-
-    // Get MQTT-password from NVS
-    String nvsMqttPassword = prefsSettings.getString("mqttPassword", "-1");
-    if (!nvsMqttPassword.compareTo("-1")) {
-        prefsSettings.putString("mqttPassword", (String) mqttPassword);
-        loggerNl((char *) FPSTR(wroteMqttPwdToNvs), LOGLEVEL_ERROR);
-    } else {
-        strncpy(mqttPassword, nvsMqttPassword.c_str(), mqttPasswordLength);
-        snprintf(logBuf, serialLoglength, "%s: %s", (char *) FPSTR(restoredMqttPwdFromNvs), nvsMqttPassword.c_str());
-        loggerNl(logBuf, LOGLEVEL_INFO);
-    }
+        // Get MQTT-password from NVS
+        String nvsMqttPassword = prefsSettings.getString("mqttPassword", "-1");
+        if (!nvsMqttPassword.compareTo("-1")) {
+            prefsSettings.putString("mqttPassword", (String) mqttPassword);
+            loggerNl((char *) FPSTR(wroteMqttPwdToNvs), LOGLEVEL_ERROR);
+        } else {
+            strncpy(mqttPassword, nvsMqttPassword.c_str(), mqttPasswordLength);
+            snprintf(logBuf, serialLoglength, "%s: %s", (char *) FPSTR(restoredMqttPwdFromNvs), nvsMqttPassword.c_str());
+            loggerNl(logBuf, LOGLEVEL_INFO);
+        }
+    #endif    
 
     #ifdef MEASURE_BATTERY_VOLTAGE
         // Get voltages from NVS for Neopixel
@@ -4087,20 +4107,24 @@ void setup() {
     timerAlarmWrite(timer, 1000, true);         // 1000 Hz
     timerAlarmEnable(timer);
 
+    #ifdef BLUETOOTH_ENABLE
+        if (operating_mode == BT_MODE) {
+            
+            i2s_pin_config_t pin_config = {
+                .bck_io_num = I2S_BCLK,
+                .ws_io_num = I2S_LRC,
+                .data_out_num = I2S_DOUT,
+                .data_in_num = I2S_PIN_NO_CHANGE
+            };
 
-    if (operating_mode == BT_MODE) {
-        i2s_pin_config_t pin_config = {
-            .bck_io_num = I2S_BCLK,
-            .ws_io_num = I2S_LRC,
-            .data_out_num = I2S_DOUT,
-            .data_in_num = I2S_PIN_NO_CHANGE
-        };
-        a2dp_sink.set_pin_config(pin_config);
-        a2dp_sink.start("Tonuino");
-    }
+            a2dp_sink.set_pin_config(pin_config);
+            a2dp_sink.start("Tonuino");
+            
+        }        
+    #endif
 
+    // Create tasks
     if (operating_mode != BT_MODE) {
-        // Create tasks
         xTaskCreatePinnedToCore(
             rfidScanner, /* Function to implement the task */
             "rfidhandling", /* Name of the task */
@@ -4110,7 +4134,9 @@ void setup() {
             &rfid,  /* Task handle. */
             0 /* Core where the task should run */
         );
+    }
 
+    if (operating_mode == TONUINO_MODE) {
         xTaskCreatePinnedToCore(
             playAudio, /* Function to implement the task */
             "mp3play", /* Name of the task */
@@ -4129,10 +4155,12 @@ void setup() {
     pinMode(NEXT_BUTTON, INPUT_PULLUP);
     pinMode(PREVIOUS_BUTTON, INPUT_PULLUP);
 
-    // Init rotary encoder
-    encoder.attachHalfQuad(DREHENCODER_CLK, DREHENCODER_DT);
-    encoder.clearCount();
-    encoder.setCount(initVolume*2);         // Ganzes Raster ist immer +2, daher initiale Lautstärke mit 2 multiplizieren
+    #ifdef USE_ENCODER
+        // Init rotary encoder
+        encoder.attachHalfQuad(DREHENCODER_CLK, DREHENCODER_DT);
+        encoder.clearCount();
+        encoder.setCount(initVolume*2);         // Ganzes Raster ist immer +2, daher initiale Lautstärke mit 2 multiplizieren
+    #endif
 
     // Only enable MQTT if requested
     #ifdef MQTT_ENABLE
@@ -4165,13 +4193,20 @@ void setup() {
     #endif
     bootComplete = true;
 
+    if (operating_mode != BT_MODE) {
+        Serial.printf("\n****Before BLEDevice::deinit ESP.getFreeHeap() %u\n",ESP.getFreeHeap());
+        //esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
+        esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
+        Serial.printf("\n****After BLEDevice::deinit ESP.getFreeHeap() %u\n",ESP.getFreeHeap());
+    }
+
     Serial.print(F("Free heap: "));
     Serial.println(ESP.getFreeHeap());
 }
 
 
 void loop() {
-    if (operating_mode != BT_MODE) {
+    if (operating_mode == CONFIG_MODE) {
       webserverStart();
     }
     #ifdef HEADPHONE_ADJUST_ENABLE
@@ -4180,38 +4215,38 @@ void loop() {
     #ifdef MEASURE_BATTERY_VOLTAGE
         batteryVoltageTester();
     #endif
-    volumeHandler(minVolume, maxVolume);
+    #ifdef USE_ENCODER
+        volumeHandler(minVolume, maxVolume);
+    #endif
     buttonHandler();
     doButtonActions();
     sleepHandler();
     deepSleepManager();
     
-
-    if (operating_mode != BT_MODE) {
-        rfidPreferenceLookupHandler();
-        if (wifiManager() == WL_CONNECTED) {
-            #ifdef MQTT_ENABLE
-                if (enableMqtt) {
-                    reconnect();
-                    MQTTclient.loop();
-                    postHeartbeatViaMqtt();
-                }
-            #endif
-            #ifdef FTP_ENABLE
-                ftpSrv.handleFTP();
-            #endif
-        }
-        #ifdef FTP_ENABLE
-            if (ftpSrv.isConnected()) {
-                lastTimeActiveTimestamp = millis();     // Re-adjust timer while client is connected to avoid ESP falling asleep
+    rfidPreferenceLookupHandler();
+    if (wifiManager() == WL_CONNECTED) {
+        #ifdef MQTT_ENABLE
+            if (enableMqtt) {
+                reconnect();
+                MQTTclient.loop();
+                postHeartbeatViaMqtt();
             }
         #endif
-    
+        #ifdef FTP_ENABLE
+            ftpSrv.handleFTP();
+        #endif
+    }
+    #ifdef FTP_ENABLE
+        if (ftpSrv.isConnected()) {
+            lastTimeActiveTimestamp = millis();     // Re-adjust timer while client is connected to avoid ESP falling asleep
+        }
+    #endif
+
     #ifdef PLAY_LAST_RFID_AFTER_REBOOT
         recoverLastRfidPlayed();
     #endif
+
     ws.cleanupClients();
-    }
 }
 
 
