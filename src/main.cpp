@@ -689,14 +689,32 @@ void doButtonActions(void) {
             wifiStatusToggledTimestamp = millis();
             buttons[0].isPressed = false;
             buttons[1].isPressed = false;
-            if (writeWifiStatusToNVS(!getWifiEnableStatusFromNVS())) {
-                #ifdef NEOPIXEL_ENABLE
-                    showLedOk = true;       // Tell user action was accepted
-                #endif
-            } else {
-                #ifdef NEOPIXEL_ENABLE
-                    showLedError = true;    // Tell user action failed
-                #endif
+            if (operating_mode == TONUINO_MODE)
+            {
+                if (prefsSettings.putUChar("operating_mode", BT_MODE)) {
+                    loggerNl((char *) FPSTR("BT_MODE"), LOGLEVEL_NOTICE);
+                    delay(1000);
+                    ESP.restart();
+                }
+            }
+            
+            if (operating_mode == BT_MODE)
+            {
+                if (prefsSettings.putUChar("operating_mode", WEBRADIO_MODE)) {
+                    loggerNl((char *) FPSTR("WEBRADIO_MODE"), LOGLEVEL_NOTICE);
+                    delay(1000);
+                    ESP.restart();
+                }
+            }
+
+            if (operating_mode == WEBRADIO_MODE)
+            {
+                if (prefsSettings.putUChar("operating_mode", TONUINO_MODE))
+                {
+                  loggerNl((char *) FPSTR("TONUINO_MODE"), LOGLEVEL_NOTICE);
+                  delay(1000);
+                  ESP.restart();
+                }
             }
         }
         return;
@@ -4081,27 +4099,28 @@ void setup() {
         a2dp_sink.start("Tonuino");
     }
 
+    if (operating_mode != BT_MODE) {
+        // Create tasks
+        xTaskCreatePinnedToCore(
+            rfidScanner, /* Function to implement the task */
+            "rfidhandling", /* Name of the task */
+            2000,  /* Stack size in words */
+            NULL,  /* Task input parameter */
+            1,  /* Priority of the task */
+            &rfid,  /* Task handle. */
+            0 /* Core where the task should run */
+        );
 
-    // Create tasks
-    xTaskCreatePinnedToCore(
-        rfidScanner, /* Function to implement the task */
-        "rfidhandling", /* Name of the task */
-        2000,  /* Stack size in words */
-        NULL,  /* Task input parameter */
-        1,  /* Priority of the task */
-        &rfid,  /* Task handle. */
-        0 /* Core where the task should run */
-    );
-
-    xTaskCreatePinnedToCore(
-        playAudio, /* Function to implement the task */
-        "mp3play", /* Name of the task */
-        11000,  /* Stack size in words */
-        NULL,  /* Task input parameter */
-        2 | portPRIVILEGE_BIT,  /* Priority of the task */
-        &mp3Play,  /* Task handle. */
-        1 /* Core where the task should run */
-    );
+        xTaskCreatePinnedToCore(
+            playAudio, /* Function to implement the task */
+            "mp3play", /* Name of the task */
+            11000,  /* Stack size in words */
+            NULL,  /* Task input parameter */
+            2 | portPRIVILEGE_BIT,  /* Priority of the task */
+            &mp3Play,  /* Task handle. */
+            1 /* Core where the task should run */
+        );
+    }
 
 
     // Activate internal pullups for all buttons
@@ -4166,9 +4185,10 @@ void loop() {
     doButtonActions();
     sleepHandler();
     deepSleepManager();
-    rfidPreferenceLookupHandler();
+    
 
     if (operating_mode != BT_MODE) {
+        rfidPreferenceLookupHandler();
         if (wifiManager() == WL_CONNECTED) {
             #ifdef MQTT_ENABLE
                 if (enableMqtt) {
@@ -4186,11 +4206,12 @@ void loop() {
                 lastTimeActiveTimestamp = millis();     // Re-adjust timer while client is connected to avoid ESP falling asleep
             }
         #endif
-    }
+    
     #ifdef PLAY_LAST_RFID_AFTER_REBOOT
         recoverLastRfidPlayed();
     #endif
     ws.cleanupClients();
+    }
 }
 
 
