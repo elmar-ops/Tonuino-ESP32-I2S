@@ -54,8 +54,6 @@
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 #include <nvsDump.h>
-#include <Update.h>
-
 
 // Info-docs:
 // https://docs.aws.amazon.com/de_de/freertos-kernel/latest/dg/queue-management.html
@@ -364,67 +362,7 @@ void volumeHandler(const int32_t _minVolume, const int32_t _maxVolume);
 void volumeToQueueSender(const int32_t _newVolume);
 wl_status_t wifiManager(void);
 bool writeWifiStatusToNVS(bool wifiStatus);
-void performUpdate(Stream &updateSource, size_t updateSize);
 
-// perform the actual update from a given stream
-void performUpdate(Stream &updateSource, size_t updateSize) {
-   if (Update.begin(updateSize)) {      
-      size_t written = Update.writeStream(updateSource);
-      if (written == updateSize) {
-         Serial.println("Written : " + String(written) + " successfully");
-      }
-      else {
-         Serial.println("Written only : " + String(written) + "/" + String(updateSize) + ". Retry?");
-      }
-      if (Update.end()) {
-         Serial.println("OTA done!");
-         if (Update.isFinished()) {
-            Serial.println("Update successfully completed. Rebooting.");
-         }
-         else {
-            Serial.println("Update not finished? Something went wrong!");
-         }
-      }
-      else {
-         Serial.println("Error Occurred. Error #: " + String(Update.getError()));
-      }
-
-   }
-   else
-   {
-      Serial.println("Not enough space to begin OTA");
-   }
-}
-
-// check given FS for valid update.bin and perform update if available
-void updateFromFS() {
-   File updateBin = SD.open("/update.bin");
-   if (updateBin) {
-      if(updateBin.isDirectory()){
-         Serial.println("Error, update.bin is not a file");
-         updateBin.close();
-         return;
-      }
-
-      size_t updateSize = updateBin.size();
-
-      if (updateSize > 0) {
-         Serial.println("Try to start update");
-         performUpdate(updateBin, updateSize);
-      }
-      else {
-         Serial.println("Error, file is empty");
-      }
-
-      updateBin.close();
-    
-      // whe finished remove the binary from sd card to indicate end of the process
-      SD.remove("/update.bin");      
-   }
-   else {
-      Serial.println("Could not load update.bin from sd root");
-   }
-}
 
 /* Wrapper-Funktion for Serial-logging (with newline) */
 void loggerNl(const char *str, const uint8_t logLevel) {
@@ -3893,9 +3831,6 @@ void setup() {
         Serial.println(F("UNKNOWN"));
     }
 
-    // try update if exist /update.bin
-    updateFromFS();
-
     #ifdef HEADPHONE_ADJUST_ENABLE
         pinMode(HP_DETECT, INPUT);
         headphoneLastDetectionState = digitalRead(HP_DETECT);
@@ -4129,6 +4064,7 @@ void setup() {
     timerAlarmWrite(timer, 1000, true);         // 1000 Hz
     timerAlarmEnable(timer);
 
+
     // Create tasks
     xTaskCreatePinnedToCore(
         rfidScanner, /* Function to implement the task */
@@ -4170,8 +4106,10 @@ void setup() {
         }
     #endif
 
+    #ifndef BLUETOOTH_ENABLE 
     wifiEnabled = getWifiEnableStatusFromNVS();
     wifiManager();
+    #endif
 
     lastTimeActiveTimestamp = millis();     // initial set after boot
 
@@ -4190,15 +4128,14 @@ void setup() {
         }
     #endif
     bootComplete = true;
-
-
-
+    
     Serial.print(F("Free heap: "));
     Serial.println(ESP.getFreeHeap());
 }
 
 
 void loop() {
+    #ifndef BLUETOOTH_ENABLE {
     webserverStart();
     #ifdef HEADPHONE_ADJUST_ENABLE
         headphoneVolumeManager();
@@ -4233,6 +4170,15 @@ void loop() {
         recoverLastRfidPlayed();
     #endif
     ws.cleanupClients();
+    }
+    #else
+        volumeHandler(minVolume, maxVolume);
+        buttonHandler();
+        doButtonActions();
+        sleepHandler();
+        deepSleepManager();
+    #endif
+
 }
 
 
