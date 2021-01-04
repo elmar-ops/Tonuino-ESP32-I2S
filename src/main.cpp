@@ -127,6 +127,7 @@ char *logBuf = (char*) calloc(serialLoglength, sizeof(char)); // Buffer for all 
 #define PLAYLIST                        2           // Repeat whole playlist (infinite loop)
 #define TRACK_N_PLAYLIST                3           // Repeat both (infinite loop)
 
+
 typedef struct { // Bit field
     uint8_t playMode:                   4;      // playMode
     char **playlist;                            // playlist
@@ -165,6 +166,8 @@ bool enableMqtt = true;
     uint8_t const stillOnlineInterval = 60;             // Interval 'I'm still alive' is sent via MQTT (in seconds)
     uint32_t mqttLastRetryTimestamp = 0;
 #endif
+
+uint8_t operating_mode = TONUINO_MODE;                  // Mode as BT has not enough mem in Tonuino Mode
 
 uint8_t const cardIdSize = 4;                           // RFID
 // Volume
@@ -3722,7 +3725,7 @@ void handleUpload(AsyncWebServerRequest *request, String filename, size_t index,
 
 void setup() {
     Serial.begin(115200);
-    esp_sleep_enable_ext0_wakeup((gpio_num_t) DREHENCODER_BUTTON, 0);
+    esp_sleep_enable_ext0_wakeup((gpio_num_t) PAUSEPLAY_BUTTON, 0);
     srand(esp_random());
     pinMode(POWER, OUTPUT);
     digitalWrite(POWER, HIGH);
@@ -3812,7 +3815,7 @@ void setup() {
    Serial.println(F("  ESP-32 version"));
    Serial.println(F(""));
 
-   // show SD card type
+    // show SD card type
     #ifdef SD_MMC_1BIT_MODE
       loggerNl((char *) FPSTR(sdMountedMmc1BitMode), LOGLEVEL_NOTICE);
       uint8_t cardType = SD_MMC.cardType();
@@ -3836,41 +3839,19 @@ void setup() {
         headphoneLastDetectionState = digitalRead(HP_DETECT);
     #endif
 
-    #ifdef BLUETOOTH_ENABLE
-        i2s_pin_config_t pin_config = {
-            .bck_io_num = I2S_BCLK,
-            .ws_io_num = I2S_LRC,
-            .data_out_num = I2S_DOUT,
-            .data_in_num = I2S_PIN_NO_CHANGE
-        };
-        a2dp_sink.set_pin_config(pin_config);
-        a2dp_sink.start("Tonuino");
-    #endif
-
-    // Create queues
-    volumeQueue = xQueueCreate(1, sizeof(int));
-    if (volumeQueue == NULL) {
-        loggerNl((char *) FPSTR(unableToCreateVolQ), LOGLEVEL_ERROR);
-    }
-
-    rfidCardQueue = xQueueCreate(1, (cardIdSize + 1) * sizeof(char));
-    if (rfidCardQueue == NULL) {
-        loggerNl((char *) FPSTR(unableToCreateRfidQ), LOGLEVEL_ERROR);
-    }
-
-    trackControlQueue = xQueueCreate(1, sizeof(uint8_t));
-    if (trackControlQueue == NULL) {
-        loggerNl((char *) FPSTR(unableToCreateMgmtQ), LOGLEVEL_ERROR);
-    }
-
-    char **playlistArray;
-    trackQueue = xQueueCreate(1, sizeof(playlistArray));
-    if (trackQueue == NULL) {
-        loggerNl((char *) FPSTR(unableToCreatePlayQ), LOGLEVEL_ERROR);
-    }
-
+    
     // Get some stuff from NVS...
     // Get initial LED-brightness from NVS
+
+     operating_mode = prefsSettings.getUChar("operating_mode", 0);
+     if (operating_mode) {
+        snprintf(logBuf, serialLoglength, "%s: %d", (char *) FPSTR(initialModefromNvs), operating_mode);
+        loggerNl(logBuf, LOGLEVEL_INFO);
+    } else {
+        prefsSettings.putUChar("operating_mode", TONUINO_MODE);
+        loggerNl((char *) FPSTR(wroteInitialModeToNvs), LOGLEVEL_ERROR);
+    }
+
     uint8_t nvsILedBrightness = prefsSettings.getUChar("iLedBrightness", 0);
     if (nvsILedBrightness) {
             initialLedBrightness = nvsILedBrightness;
@@ -3948,6 +3929,8 @@ void setup() {
         prefsSettings.putUInt("maxVolumeSp", nvsMaxVolumeSpeaker);
         loggerNl((char *) FPSTR(wroteMaxLoudnessForSpeakerToNvs), LOGLEVEL_ERROR);
     }
+
+    
 
     #ifdef HEADPHONE_ADJUST_ENABLE
         // Get maximum volume for headphone from NVS
@@ -4057,12 +4040,46 @@ void setup() {
         }
     #endif
 
+    // Create queues
+    volumeQueue = xQueueCreate(1, sizeof(int));
+    if (volumeQueue == NULL) {
+        loggerNl((char *) FPSTR(unableToCreateVolQ), LOGLEVEL_ERROR);
+    }
+
+    rfidCardQueue = xQueueCreate(1, (cardIdSize + 1) * sizeof(char));
+    if (rfidCardQueue == NULL) {
+        loggerNl((char *) FPSTR(unableToCreateRfidQ), LOGLEVEL_ERROR);
+    }
+
+    trackControlQueue = xQueueCreate(1, sizeof(uint8_t));
+    if (trackControlQueue == NULL) {
+        loggerNl((char *) FPSTR(unableToCreateMgmtQ), LOGLEVEL_ERROR);
+    }
+
+    char **playlistArray;
+    trackQueue = xQueueCreate(1, sizeof(playlistArray));
+    if (trackQueue == NULL) {
+        loggerNl((char *) FPSTR(unableToCreatePlayQ), LOGLEVEL_ERROR);
+    }
+
     // Create 1000Hz-HW-Timer (currently only used for buttons)
     timerSemaphore = xSemaphoreCreateBinary();
     timer = timerBegin(0, 240, true);           // Prescaler: CPU-clock in MHz
     timerAttachInterrupt(timer, &onTimer, true);
     timerAlarmWrite(timer, 1000, true);         // 1000 Hz
     timerAlarmEnable(timer);
+
+
+    if (operating_mode == BT_MODE) {
+        i2s_pin_config_t pin_config = {
+            .bck_io_num = I2S_BCLK,
+            .ws_io_num = I2S_LRC,
+            .data_out_num = I2S_DOUT,
+            .data_in_num = I2S_PIN_NO_CHANGE
+        };
+        a2dp_sink.set_pin_config(pin_config);
+        a2dp_sink.start("Tonuino");
+    }
 
 
     // Create tasks
@@ -4106,10 +4123,10 @@ void setup() {
         }
     #endif
 
-    #ifndef BLUETOOTH_ENABLE 
-    wifiEnabled = getWifiEnableStatusFromNVS();
-    wifiManager();
-    #endif
+    if (operating_mode != BT_MODE) {
+      wifiEnabled = getWifiEnableStatusFromNVS();
+      wifiManager();
+    }
 
     lastTimeActiveTimestamp = millis();     // initial set after boot
 
@@ -4128,15 +4145,16 @@ void setup() {
         }
     #endif
     bootComplete = true;
-    
+
     Serial.print(F("Free heap: "));
     Serial.println(ESP.getFreeHeap());
 }
 
 
 void loop() {
-    #ifndef BLUETOOTH_ENABLE {
-    webserverStart();
+    if (operating_mode != BT_MODE) {
+      webserverStart();
+    }
     #ifdef HEADPHONE_ADJUST_ENABLE
         headphoneVolumeManager();
     #endif
@@ -4149,36 +4167,30 @@ void loop() {
     sleepHandler();
     deepSleepManager();
     rfidPreferenceLookupHandler();
-    if (wifiManager() == WL_CONNECTED) {
-        #ifdef MQTT_ENABLE
-            if (enableMqtt) {
-                reconnect();
-                MQTTclient.loop();
-                postHeartbeatViaMqtt();
+
+    if (operating_mode != BT_MODE) {
+        if (wifiManager() == WL_CONNECTED) {
+            #ifdef MQTT_ENABLE
+                if (enableMqtt) {
+                    reconnect();
+                    MQTTclient.loop();
+                    postHeartbeatViaMqtt();
+                }
+            #endif
+            #ifdef FTP_ENABLE
+                ftpSrv.handleFTP();
+            #endif
+        }
+        #ifdef FTP_ENABLE
+            if (ftpSrv.isConnected()) {
+                lastTimeActiveTimestamp = millis();     // Re-adjust timer while client is connected to avoid ESP falling asleep
             }
         #endif
-        #ifdef FTP_ENABLE
-            ftpSrv.handleFTP();
-        #endif
     }
-    #ifdef FTP_ENABLE
-        if (ftpSrv.isConnected()) {
-            lastTimeActiveTimestamp = millis();     // Re-adjust timer while client is connected to avoid ESP falling asleep
-        }
-    #endif
     #ifdef PLAY_LAST_RFID_AFTER_REBOOT
         recoverLastRfidPlayed();
     #endif
     ws.cleanupClients();
-    }
-    #else
-        volumeHandler(minVolume, maxVolume);
-        buttonHandler();
-        doButtonActions();
-        sleepHandler();
-        deepSleepManager();
-    #endif
-
 }
 
 

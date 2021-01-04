@@ -174,3 +174,9 @@ float voltageIndicatorHigh = 4.2;                   // Upper range for Neopixel-
         static const char topicBatteryVoltage[] PROGMEM = "State/Tonuino/Voltage";
     #endif
 #endif
+
+//Operatingmodes
+
+#define TONUINO_MODE                    1
+#define BT_MODE                         2
+#define WEBRADIO_MODE                   3
