@@ -314,6 +314,8 @@ QueueHandle_t trackQueue;
 QueueHandle_t trackControlQueue;
 QueueHandle_t rfidCardQueue;
 
+char **webradiostations;
+
 
 //Card detection
 char *prevCardIdString = strndup((char*) "0", cardIdSize); 
@@ -332,6 +334,7 @@ void deepSleepManager(void);
 void doButtonActions(void);
 void doRfidCardModifications(const uint32_t mod);
 bool dumpNvsToSd(char *_namespace, char *_destFile);
+bool getWebRadioStations(char *_namespace);
 bool endsWith (const char *str, const char *suf);
 bool fileValid(const char *_fileItem);
 void freeMultiCharArray(char **arr, const uint32_t cnt);
@@ -3640,6 +3643,78 @@ void webserverStart(void) {
     }
 }
 
+    bool getWebRadioStations(char *_namespace) {
+        #ifdef NEOPIXEL_ENABLE
+            pauseNeopixel = true;   // Workaround to prevent exceptions due to Neopixel-signalisation while NVS-write
+        #endif
+        esp_partition_iterator_t pi;                // Iterator for find
+        const esp_partition_t* nvs;                 // Pointer to partition struct
+        esp_err_t result = ESP_OK;
+        const char* partname = "nvs";
+        uint8_t pagenr = 0;                         // Page number in NVS
+        uint8_t i;                                  // Index in Entry 0..125
+        uint8_t bm;                                 // Bitmap for an entry
+        uint32_t offset = 0;                        // Offset in nvs partition
+        uint8_t namespace_ID;                       // Namespace ID found
+        char* station = (char *) malloc(sizeof(char) * 255);
+
+         pi = esp_partition_find ( ESP_PARTITION_TYPE_DATA,          // Get partition iterator for
+                                    ESP_PARTITION_SUBTYPE_ANY,      // this partition
+                                    partname ) ;
+
+         if (pi) {
+            nvs = esp_partition_get(pi);                            // Get partition struct
+            esp_partition_iterator_release(pi);                     // Release the iterator
+            dbgprint ( "Partition %s found, %d bytes",
+                    partname,
+                    nvs->size ) ;
+        } else {
+            Serial.printf("Partition %s not found!", partname) ;
+            return NULL;
+        }
+
+        namespace_ID = FindNsID (nvs, _namespace) ;             // Find ID of our namespace in NVS
+
+        while (offset < nvs->size) {
+            result = esp_partition_read (nvs, offset,                // Read 1 page in nvs partition
+                                        &buf,
+                                        sizeof(nvs_page));
+            if (result != ESP_OK) {
+                Serial.println(F("Error reading NVS!"));
+                return false;
+            }
+
+            i = 0;
+
+            while (i < 126) {
+                bm = (buf.Bitmap[i/4] >> ((i % 4) * 2 )) & 0x03;  // Get bitmap for this entry
+                if (bm == 2) {
+                    if ((namespace_ID == 0xFF) ||                      // Show all if ID = 0xFF
+                        (buf.Entry[i].Ns == namespace_ID)) {           // otherwise just my namespace
+                        if (isNumber(buf.Entry[i].Key)) {
+                            String s = prefsRfid.getString((const char *)buf.Entry[i].Key);
+                            Serial.printf("%s%s\n", buf.Entry[i].Key, s.c_str());
+                            webradiostations[pagenr] = strndup((char*) s.c_str(), sizeof s.c_str() + 1);
+                        }
+                    }
+                    i += buf.Entry[i].Span;                              // Next entry
+                } else {
+                    i++;
+                }
+            }
+            offset += sizeof(nvs_page);                              // Prepare to read next page in nvs
+            
+            pagenr++;
+            
+        }
+
+        #ifdef NEOPIXEL_ENABLE
+            pauseNeopixel = false;
+        #endif
+
+        return true;
+    }
+
 
 // Dumps all RFID-entries from NVS into a file on SD-card
     bool dumpNvsToSd(char *_namespace, char *_destFile) {
@@ -4198,6 +4273,10 @@ void setup() {
         //esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
         esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
         Serial.printf("\n****After BLEDevice::deinit ESP.getFreeHeap() %u\n",ESP.getFreeHeap());
+    }
+
+    if (operating_mode != WEBRADIO_MODE) {
+        getWebRadioStations("rfidTags");
     }
 
     Serial.print(F("Free heap: "));
