@@ -1,6 +1,7 @@
 #include "Arduino.h"
 
 //########################## MODULES #################################
+//######################### INFOS ####################################
 #define MDNS_ENABLE                     // When enabled, you don't have to handle with Tonuino's IP-address. If hostname is set to "tonuino", you can reach it via tonuino.local
 //#define MQTT_ENABLE                   // Make sure to configure mqtt-server and (optionally) username+pwd
 //#define FTP_ENABLE                    // Enables FTP-server
@@ -86,6 +87,10 @@
     #define VOLTAGE_READ_PIN            35          // GPIO used to monitor battery-voltage. Change to 35 if you're using Lolin D32 or Lolin D32 pro as it's hard-wired there!
 #endif
 
+//################## select RFID reader ##############################
+#define RFID_READER_TYPE_MFRC522_SPI        // use MFRC522 via SPI
+//#define RFID_READER_TYPE_MFRC522_I2C        // use MFRC522 via I2C
+//#define RFID_READER_TYPE_PN5180
 
 
 //#################### Various settings ##############################
@@ -124,6 +129,8 @@ static const char backupFile[] PROGMEM = "/backup.txt"; // File is written every
 uint8_t FS_DEPTH = 5;                               // Max. recursion-depth of file tree
 const char *DIRECTORY_INDEX_FILE = "/files.json";   // Filename of files.json index file
 
+
+//#################### Settings for optional Modules##############################
 // (optinal) Neopixel
 #ifdef NEOPIXEL_ENABLE
     #define NUM_LEDS                    24          // number of LEDs
@@ -156,6 +163,8 @@ float voltageIndicatorHigh = 4.2;                   // Upper range for Neopixel-
     static const char topicSleepCmnd[] PROGMEM = "Cmnd/Tonuino/Sleep";
     static const char topicSleepState[] PROGMEM = "State/Tonuino/Sleep";
     static const char topicTrackCmnd[] PROGMEM = "Cmnd/Tonuino/Track";
+    static const char topicRfidCmnd[] PROGMEM = "Cmnd/Tonuino/Rfid";
+    static const char topicRfidState[] PROGMEM = "State/Tonuino/Rfid";
     static const char topicTrackState[] PROGMEM = "State/Tonuino/Track";
     static const char topicTrackControlCmnd[] PROGMEM = "Cmnd/Tonuino/TrackControl";
     static const char topicLoudnessCmnd[] PROGMEM = "Cmnd/Tonuino/Loudness";
@@ -181,4 +190,3 @@ float voltageIndicatorHigh = 4.2;                   // Upper range for Neopixel-
 #define TONUINO_MODE                    1
 #define BT_MODE                         2
 #define WEBRADIO_MODE                   3
-#define CONFIG_MODE                     4
