@@ -3914,6 +3914,7 @@ void explorerHandleFileUpload(AsyncWebServerRequest *request, String filename, s
         // close the file handle as the upload is now done
         request->_tempFile.close();
     }
+    lastTimeActiveTimestamp = millis(); //prevent sleep
 }
 
 // Sends a list of the content of a directory as JSON file
