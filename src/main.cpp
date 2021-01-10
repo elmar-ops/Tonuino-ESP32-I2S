@@ -280,7 +280,7 @@ TaskHandle_t rfid;
 #endif
 
 #ifdef RFID_READER_TYPE_MFRC522_SPI
-    static MFRC522 mfrc522(RFID_CS, RST_PIN);
+        static MFRC522 mfrc522(RFID_CS, RST_PIN);
 #endif
 #ifdef RFID_READER_TYPE_MFRC522_I2C
     static TwoWire i2cBusTwo = TwoWire(1);
@@ -4208,6 +4208,9 @@ void setup() {
     #endif
 
     #ifdef RFID_READER_TYPE_MFRC522_SPI
+        SPI.begin(RFID_SCK,RFID_MISO,RFID_MOSI,RFID_CS);
+        //pinMode(RFID_CS, OUTPUT);
+        //digitalWrite(RFID_CS, HIGH);
         mfrc522.PCD_Init();
         delay(50);
         loggerNl((char *) FPSTR(rfidScannerReady), LOGLEVEL_DEBUG);
