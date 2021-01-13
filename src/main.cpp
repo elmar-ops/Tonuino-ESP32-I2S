@@ -280,7 +280,7 @@ TaskHandle_t rfid;
 #endif
 
 #ifdef RFID_READER_TYPE_MFRC522_SPI
-        static MFRC522 mfrc522(RFID_CS, RST_PIN);
+        MFRC522 *mfrc522;
 #endif
 #ifdef RFID_READER_TYPE_MFRC522_I2C
     static TwoWire i2cBusTwo = TwoWire(1);
@@ -1835,12 +1835,12 @@ void rfidScanner(void *parameter) {
             lastRfidCheckTimestamp = millis();
             // Reset the loop if no new card is present on the sensor/reader. This saves the entire process when idle.
 
-            if (!mfrc522.PICC_IsNewCardPresent()) {
+            if (!mfrc522->PICC_IsNewCardPresent()) {
                 continue;
             }
 
             // Select one of the cards
-            if (!mfrc522.PICC_ReadCardSerial()) {
+            if (!mfrc522->PICC_ReadCardSerial()) {
                 continue;
             }
 
@@ -1860,7 +1860,7 @@ void rfidScanner(void *parameter) {
             uint8_t n = 0;
             logger((char *) FPSTR(rfidTagDetected), LOGLEVEL_NOTICE);
             for (uint8_t i=0; i<cardIdSize; i++) {
-                cardId[i] = mfrc522.uid.uidByte[i];
+                cardId[i] = mfrc522->uid.uidByte[i];
 
                 snprintf(logBuf, serialLoglength, "%02x", cardId[i]);
                 logger(logBuf, LOGLEVEL_NOTICE);
@@ -1892,12 +1892,12 @@ void rfidScanner(void *parameter) {
                 vTaskDelay(10);
                 control=0;
                 for(int i=0; i<3; i++){
-                    if(!mfrc522.PICC_IsNewCardPresent()){
-                        if(mfrc522.PICC_ReadCardSerial()){
+                    if(!mfrc522->PICC_IsNewCardPresent()){
+                        if(mfrc522->PICC_ReadCardSerial()){
                         //Serial.print('a');
                         control |= 0x16;
                         }
-                        if(mfrc522.PICC_ReadCardSerial()){
+                        if(mfrc522->PICC_ReadCardSerial()){
                         //Serial.print('b');
                         control |= 0x16;
                         }
@@ -1921,8 +1921,8 @@ void rfidScanner(void *parameter) {
               trackControlToQueueSender(PAUSEPLAY);
               Serial.println("...continue");
             }
-            mfrc522.PICC_HaltA();
-            mfrc522.PCD_StopCrypto1();
+            mfrc522->PICC_HaltA();
+            mfrc522->PCD_StopCrypto1();
         }
     }
     vTaskDelete(NULL);
@@ -4208,12 +4208,15 @@ void setup() {
     #endif
 
     #ifdef RFID_READER_TYPE_MFRC522_SPI
-        SPI.begin(RFID_SCK,RFID_MISO,RFID_MOSI,RFID_CS);
-        //pinMode(RFID_CS, OUTPUT);
-        //digitalWrite(RFID_CS, HIGH);
-        mfrc522.PCD_Init();
-        delay(50);
-        loggerNl((char *) FPSTR(rfidScannerReady), LOGLEVEL_DEBUG);
+        if (operating_mode != BT_MODE) {
+            SPI.begin(RFID_SCK,RFID_MISO,RFID_MOSI,RFID_CS);
+            //pinMode(RFID_CS, OUTPUT);
+            //digitalWrite(RFID_CS, HIGH);
+            mfrc522 = new MFRC522(RFID_CS, RST_PIN);
+            mfrc522->PCD_Init();
+            delay(50);
+            loggerNl((char *) FPSTR(rfidScannerReady), LOGLEVEL_DEBUG);
+        }
     #endif
 
    // welcome message
@@ -4619,7 +4622,9 @@ void loop() {
     #endif
 
     #ifdef PLAY_LAST_RFID_AFTER_REBOOT
-        recoverLastRfidPlayed();
+        if (operating_mode != BT_MODE) {
+          recoverLastRfidPlayed();
+        }
     #endif
 
     ws.cleanupClients();
