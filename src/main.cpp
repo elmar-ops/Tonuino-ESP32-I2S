@@ -4581,6 +4581,11 @@ void loop() {
     if (operating_mode != BT_MODE) {
       webserverStart();
     }
+
+    if (operating_mode == BT_MODE) {
+       lastTimeActiveTimestamp = millis(); //prevent sleep
+    }
+    
 	#ifdef FTP_ENABLE
         ftpManager();
     #endif
