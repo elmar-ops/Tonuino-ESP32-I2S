@@ -70,6 +70,7 @@
 #define PAUSEPLAY_BUTTON                5
 #define NEXT_BUTTON                     4
 #define PREVIOUS_BUTTON                 33           // Please note: as of 19.11.2020 changed from 33 to 2
+#define WAKUPMASK                       0x200000000     
 
 // (optional) Power-control
 #define POWER                           17          // GPIO used to drive transistor-circuit, that switches off peripheral devices while ESP32-deepsleep

@@ -62,6 +62,8 @@
 #include <ArduinoJson.h>
 #include <nvsDump.h>
 #include <vector>
+#include <esp_wifi.h>
+#include "driver/rtc_io.h"
 
 // Info-docs:
 // https://docs.aws.amazon.com/de_de/freertos-kernel/latest/dg/queue-management.html
@@ -400,6 +402,7 @@ void volumeHandler(const int32_t _minVolume, const int32_t _maxVolume);
 void volumeToQueueSender(const int32_t _newVolume);
 wl_status_t wifiManager(void);
 bool writeWifiStatusToNVS(bool wifiStatus);
+void print_wakeup_reason(void);
 
 
 /* Wrapper-Funktion for Serial-logging (with newline) */
@@ -2455,9 +2458,27 @@ void deepSleepManager(void) {
             FastLED.clear();
             FastLED.show();
         #endif
+        #ifdef BLUETOOTH_ENABLE
+            esp_bluedroid_disable();
+            esp_bt_controller_disable();
+        #endif
+        esp_wifi_stop();
+
+        #ifdef RFID_READER_TYPE_MFRC522
+          mfrc522->PCD_SoftPowerDown();
+        #endif
+
+        //max98357a shout soft standby as no BLCK signal will be send
+
         /*SPI.end();
         spiSD.end();*/
         digitalWrite(POWER, LOW);
+        esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+        //rtc_gpio_pullup_en(GPIO_NUM_4);
+        //rtc_gpio_pulldown_dis(GPIO_NUM_4);
+        // only pin 32 - 39 are available in ext1!
+        rtc_gpio_pullup_en(GPIO_NUM_33);
+        rtc_gpio_pulldown_dis(GPIO_NUM_33);
         delay(200);
         esp_deep_sleep_start();
     }
@@ -4546,6 +4567,12 @@ void setup() {
         }
     #endif
 
+    // wakup prepare
+    print_wakeup_reason();
+    esp_sleep_enable_ext1_wakeup(WAKUPMASK, ESP_EXT1_WAKEUP_ALL_LOW);
+    //gpio_wakeup_enable(PAUSEPLAY_BUTTON,GPIO_INTR_LOW_LEVEL );
+    //esp_sleep_enable_ext0_wakeup(GPIO_NUM_4, 0);
+    
     if (operating_mode != BT_MODE) {
       wifiEnabled = getWifiEnableStatusFromNVS();
       wifiManager();
@@ -4562,7 +4589,7 @@ void setup() {
 
     if (operating_mode != BT_MODE) {
         Serial.printf("\n****Before BLEDevice::deinit ESP.getFreeHeap() %u\n",ESP.getFreeHeap());
-        //esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
+        esp_bt_controller_deinit();
         esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
         Serial.printf("\n****After BLEDevice::deinit ESP.getFreeHeap() %u\n",ESP.getFreeHeap());
     }
@@ -4585,7 +4612,7 @@ void loop() {
     if (operating_mode == BT_MODE) {
        lastTimeActiveTimestamp = millis(); //prevent sleep
     }
-    
+
 	#ifdef FTP_ENABLE
         ftpManager();
     #endif
@@ -4678,4 +4705,20 @@ void audio_icyurl(const char *info) {  //homepage
 void audio_lasthost(const char *info) {  //stream URL played
     snprintf(logBuf, serialLoglength, "lasthost    : %s", info);
     loggerNl(logBuf, LOGLEVEL_INFO);
+}
+
+void print_wakeup_reason(){
+  esp_sleep_wakeup_cause_t wakeup_reason;
+
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+
+  switch(wakeup_reason)
+  {
+    case ESP_SLEEP_WAKEUP_EXT0 : Serial.println("Wakeup caused by external signal using RTC_IO"); break;
+    case ESP_SLEEP_WAKEUP_EXT1 : Serial.println("Wakeup caused by external signal using RTC_CNTL"); break;
+    case ESP_SLEEP_WAKEUP_TIMER : Serial.println("Wakeup caused by timer"); break;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println("Wakeup caused by touchpad"); break;
+    case ESP_SLEEP_WAKEUP_ULP : Serial.println("Wakeup caused by ULP program"); break;
+    default : Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); break;
+  }
 }
