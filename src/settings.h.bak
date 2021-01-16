@@ -45,6 +45,7 @@
 //#define RFID_READER_TYPE_MFRC522_I2C        // use MFRC522 via I2C
 //#define RFID_READER_TYPE_PN5180
 
+
 //#################### Various settings ##############################
 // Loglevels available (don't change!)
 #define LOGLEVEL_ERROR                  1           // only errors

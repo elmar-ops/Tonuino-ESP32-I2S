@@ -1,20 +1,6 @@
 // !!! MAKE SURE TO EDIT settings.h !!!
 
 #include "settings.h"                       // Contains all user-relevant settings
-
-// !!! MAKE SURE TO EDIT PLATFORM SPECIFIC settings-****.h !!!
-#if (HAL == 1)
-    #include "settings-lolin32.h"                       // Contains all user-relevant settings for Wemos Lolin32
-#elif (HAL == 2)
-    #include "settings-espa1s.h"                        // Contains all user-relevant settings for ESP32-A1S Audiokit
-#elif (HAL == 3)
-    #include "settings-lolin_d32.h"                     // Contains all user-relevant settings for Wemos Lolin D32
-#elif (HAL == 4)
-    #include "settings-lolin_d32_pro.h"                 // Contains all user-relevant settings for Wemos Lolin D32 pro
-#elif (HAL == 5)
-    #include "settings-ttgo-t8.h"                 // Contains all user-relevant settings for Wemos Lolin D32 pro
-#endif
-
 #ifdef USE_ENCODER
     #include <ESP32Encoder.h>
 #endif
