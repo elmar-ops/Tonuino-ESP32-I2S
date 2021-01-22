@@ -20,12 +20,12 @@
 #define MDNS_ENABLE                     // When enabled, you don't have to handle with Tonuino's IP-address. If hostname is set to "tonuino", you can reach it via tonuino.local
 //#define MQTT_ENABLE                   // Make sure to configure mqtt-server and (optionally) username+pwd
 //#define FTP_ENABLE                    // Enables FTP-server
-//#define NEOPIXEL_ENABLE               // Don't forget configuration of NUM_LEDS if enabled
+#define NEOPIXEL_ENABLE               // Don't forget configuration of NUM_LEDS if enabled
 //#define NEOPIXEL_REVERSE_ROTATION     // Some Neopixels are adressed/soldered counter-clockwise. This can be configured here.
 #define LANGUAGE 1                      // 1 = deutsch; 2 = english
 //#define HEADPHONE_ADJUST_ENABLE       // Used to adjust (lower) volume for optional headphone-pcb (refer maxVolumeSpeaker / maxVolumeHeadphone)
 #define SHUTDOWN_IF_SD_BOOT_FAILS       // Will put ESP to deepsleep if boot fails due to SD. Really recommend this if there's in battery-mode no other way to restart ESP! Interval adjustable via deepsleepTimeAfterBootFails.
-//#define MEASURE_BATTERY_VOLTAGE       // Enables battery-measurement via GPIO (ADC) and voltage-divider
+#define MEASURE_BATTERY_VOLTAGE       // Enables battery-measurement via GPIO (ADC) and voltage-divider
 #define PLAY_LAST_RFID_AFTER_REBOOT     // When restarting Tonuino, the last RFID that was active before, is recalled and played
 //#define USE_ENCODER                     // Use Rotary encoder
 
@@ -43,7 +43,9 @@
 //################## select RFID reader ##############################
 #define RFID_READER_TYPE_MFRC522_SPI        // use MFRC522 via SPI
 //#define RFID_READER_TYPE_MFRC522_I2C        // use MFRC522 via I2C
-//#define RFID_READER_TYPE_PN5180
+//#define RFID_READER_TYPE_PN5180			  // use PN5180
+//#define PN5180_ENABLE_LPCD                    // enable PN5180 low power card detection: wake up on card detection
+
 
 //#################### Various settings ##############################
 // Loglevels available (don't change!)
@@ -54,6 +56,14 @@
 
 // Serial-logging-configuration
 const uint8_t serialDebug = LOGLEVEL_DEBUG;          // Current loglevel for serial console
+
+// Static ip-configuration
+#ifdef STATIC_IP_ENABLE
+    IPAddress local_IP(192, 168, 2, 100);           // Tonuino's IP
+    IPAddress gateway(192, 168, 2, 1);              // IP of the gateway/router
+    IPAddress subnet(255, 255, 255, 0);             // Netmask of your network (/24 => 255.255.255.0)
+    IPAddress primaryDNS(192, 168, 2, 1);           // DNS-server of your network; in private networks it's usually the gatewy's IP
+#endif
 
 // Buttons (better leave unchanged if in doubts :-))
 uint8_t buttonDebounceInterval = 50;                // Interval in ms to software-debounce buttons
@@ -84,7 +94,7 @@ const char *DIRECTORY_INDEX_FILE = "/files.json";   // Filename of files.json in
 //#################### Settings for optional Modules##############################
 // (optinal) Neopixel
 #ifdef NEOPIXEL_ENABLE
-    #define NUM_LEDS                    24          // number of LEDs
+    #define NUM_LEDS                    1          // number of LEDs
     #define CHIPSET                     WS2812B     // type of Neopixel
     #define COLOR_ORDER                 GRB
 #endif

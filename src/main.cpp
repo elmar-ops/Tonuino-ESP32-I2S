@@ -75,6 +75,7 @@
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 #include <nvsDump.h>
+#include "freertos/ringbuf.h"
 #include <vector>
 #include <esp_wifi.h>
 #include "driver/rtc_io.h"
@@ -222,6 +223,8 @@ bool webserverStarted = false;
 bool wifiNeedsRestart = false;
 // Neopixel
 #ifdef NEOPIXEL_ENABLE
+    bool showLedBT = false;
+    bool showLedTU = false;
     bool showLedError = false;
     bool showLedOk = false;
     bool showPlaylistProgress = false;
@@ -240,6 +243,7 @@ char *currentRfidTagId = NULL;
 unsigned long lastTimeActiveTimestamp = 0;              // Timestamp of last user-interaction
 unsigned long sleepTimerStartTimestamp = 0;             // Flag if sleep-timer is active
 bool gotoSleep = false;                                 // Flag for turning uC immediately into deepsleep
+bool sleeping = false;                                  // Flag for turning into deepsleep is in progress
 bool lockControls = false;                              // Flag if buttons and rotary encoder is locked
 bool bootComplete = false;
 
@@ -291,10 +295,17 @@ AsyncEventSource events("/events");
 #endif
 TaskHandle_t mp3Play;
 TaskHandle_t rfid;
+TaskHandle_t fileStorageTaskHandle;
+
 #ifdef NEOPIXEL_ENABLE
     TaskHandle_t LED;
 #endif
 
+#if (HAL == 2)
+    #include "AC101.h"
+    static TwoWire i2cBusOne = TwoWire(0);
+    static AC101 ac(i2cBusOne);
+#endif
 #ifdef RFID_READER_TYPE_MFRC522_SPI
         MFRC522 *mfrc522;
 #endif
@@ -348,9 +359,10 @@ QueueHandle_t trackQueue;
 QueueHandle_t trackControlQueue;
 QueueHandle_t rfidCardQueue;
 
+RingbufHandle_t explorerFileUploadRingBuffer;
+QueueHandle_t explorerFileUploadStatusQueue;
 
 std::vector<std::string> webradiostations {};
-
 //Card detection
 char *prevCardIdString = strndup((char*) "0", cardIdSize); 
 bool is_card_present = false;
@@ -377,6 +389,7 @@ bool getWifiEnableStatusFromNVS(void);
 void handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
 void convertUtf8ToAscii(String utf8String, char *asciiString);
 void explorerHandleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
+void explorerHandleFileStorageTask(void *parameter);
 void explorerHandleListRequest(AsyncWebServerRequest *request);
 void explorerHandleDeleteRequest(AsyncWebServerRequest *request);
 void explorerHandleCreateRequest(AsyncWebServerRequest *request);
@@ -416,8 +429,6 @@ void volumeHandler(const int32_t _minVolume, const int32_t _maxVolume);
 void volumeToQueueSender(const int32_t _newVolume);
 wl_status_t wifiManager(void);
 bool writeWifiStatusToNVS(bool wifiStatus);
-void print_wakeup_reason(void);
-
 
 /* Wrapper-Funktion for Serial-logging (with newline) */
 void loggerNl(const char *str, const uint8_t logLevel) {
@@ -649,12 +660,12 @@ void fileHandlingTask(void *arguments) {
     float measureBatteryVoltage(void) {
         float factor = 1 / ((float) rdiv2/(rdiv2+rdiv1));
         float averagedAnalogValue = 0;
-        int i;
-        for(i=0; i<=19; i++){
+        uint8_t i;
+        for (i=0; i<=19; i++) {
             averagedAnalogValue += (float)analogRead(VOLTAGE_READ_PIN);
         }
         averagedAnalogValue /= 20.0;
-        return (averagedAnalogValue / maxAnalogValue) * refVoltage * factor;
+        return (averagedAnalogValue / maxAnalogValue) * referenceVoltage * factor + offsetVoltage;
     }
 
     void batteryVoltageTester(void) {
@@ -1462,6 +1473,7 @@ void playAudio(void *parameter) {
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
     audio.setVolume(initVolume);
 
+
     uint8_t currentVolume;
     static BaseType_t trackQStatus;
     static uint8_t trackCommand = 0;
@@ -1971,6 +1983,8 @@ void rfidScanner(void *parameter) {
 
     for (;;) {
         esp_task_wdt_reset();
+        if (sleeping)
+          break;
         vTaskDelay(10);
         if ((millis() - lastRfidCheckTimestamp) >= RFID_SCAN_INTERVAL) {
             // Reset the loop if no new card is present on the sensor/reader. This saves the entire process when idle.
@@ -2168,6 +2182,30 @@ void showLed(void *parameter) {
 
             for (uint8_t led = 0; led < NUM_LEDS; led++) {
                 leds[ledAddress(led)] = CRGB::Green;
+            }
+            FastLED.show();
+            vTaskDelay(portTICK_RATE_MS * 400);
+        }
+
+        if (showLedBT) {             // If action was accepted
+            showLedBT = false;
+            notificationShown = true;
+            FastLED.clear();
+
+            for (uint8_t led = 0; led < NUM_LEDS; led++) {
+                leds[ledAddress(led)] = CRGB::Blue;
+            }
+            FastLED.show();
+            vTaskDelay(portTICK_RATE_MS * 400);
+        }
+
+        if (showLedTU) {             // If action was accepted
+            showLedTU = false;
+            notificationShown = true;
+            FastLED.clear();
+
+            for (uint8_t led = 0; led < NUM_LEDS; led++) {
+                leds[ledAddress(led)] = CRGB::Yellow;
             }
             FastLED.show();
             vTaskDelay(portTICK_RATE_MS * 400);
@@ -2457,10 +2495,50 @@ void sleepHandler(void) {
     }
 }
 
+#ifdef PN5180_ENABLE_LPCD
+// goto low power card detection mode
+void gotoLPCD() {
+    static PN5180 nfc(RFID_CS, RFID_BUSY, RFID_RST);
+    nfc.begin();
+    // show PN5180 reader version
+    uint8_t firmwareVersion[2];
+    nfc.readEEprom(FIRMWARE_VERSION, firmwareVersion, sizeof(firmwareVersion));
+    Serial.print(F("Firmware version="));
+    Serial.print(firmwareVersion[1]);
+    Serial.print(".");
+    Serial.println(firmwareVersion[0]);
+    // check firmware version: PN5180 firmware < 4.0 has several bugs preventing the LPCD mode
+    // you can flash latest firmware with this project: https://github.com/abidxraihan/PN5180_Updater_ESP32
+    if (firmwareVersion[1] < 4) {
+       Serial.println(F("This PN5180 firmware does not work with LPCD! use firmware >= 4.0"));
+       return;
+    }
+    Serial.println(F("prepare low power card detection..."));
+    nfc.prepareLPCD();
+    nfc.clearIRQStatus(0xffffffff);
+    Serial.print(F("PN5180 IRQ PIN: ")); Serial.println(digitalRead(RFID_IRQ));
+    // turn on LPCD
+    uint16_t wakeupCounterInMs = 0x3FF; //  must be in the range of 0x0 - 0xA82. max wake-up time is 2960 ms.
+    if (nfc.switchToLPCD(wakeupCounterInMs)) {
+        Serial.println(F("switch to low power card detection: success"));
+        // configure wakeup pin for deep-sleep wake-up, use ext1
+        esp_sleep_enable_ext1_wakeup(BUTTON_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+        // freeze pin states in deep sleep
+        gpio_hold_en(gpio_num_t(RFID_CS));  // CS/NSS
+        gpio_hold_en(gpio_num_t(RFID_RST)); // RST
+        gpio_deep_sleep_hold_en();
+   } else {
+        Serial.println(F("switchToLPCD failed"));
+    }
+}
+#endif
 
 // Puts uC to deep-sleep if flag is set
 void deepSleepManager(void) {
     if (gotoSleep) {
+        if (sleeping)
+            return;
+        sleeping = true;
         loggerNl((char *) FPSTR(goToSleepNow), LOGLEVEL_NOTICE);
         Serial.flush();
         #ifdef MQTT_ENABLE
@@ -2494,6 +2572,11 @@ void deepSleepManager(void) {
         rtc_gpio_pullup_en(GPIO_NUM_33);
         rtc_gpio_pulldown_dis(GPIO_NUM_33);
         delay(200);
+        #ifdef PN5180_ENABLE_LPCD
+            // prepare and go to low power card detection mode
+            gotoLPCD();
+        #endif
+        Serial.println(F("deep-sleep, good night......."));
         esp_deep_sleep_start();
     }
 }
@@ -3303,7 +3386,18 @@ wl_status_t wifiManager(void) {
         } else {
             loggerNl((char *) FPSTR(wifiHostnameNotSet), LOGLEVEL_INFO);
         }
-        // ...and create a connection with it. If not successful, an access-point is opened
+
+        // Add configration of static IP (if requested)
+        #ifdef STATIC_IP_ENABLE
+            snprintf(logBuf, serialLoglength, "%s", (char *) FPSTR(tryStaticIpConfig));
+            loggerNl(logBuf, LOGLEVEL_NOTICE);
+            if (!WiFi.config(local_IP, gateway, subnet, primaryDNS)) {
+                snprintf(logBuf, serialLoglength, "%s", (char *) FPSTR(staticIPConfigFailed));
+                loggerNl(logBuf, LOGLEVEL_ERROR);
+            }
+        #endif
+
+        // Try to join local WiFi. If not successful, an access-point is opened
         WiFi.begin(_ssid, _pwd);
 
         uint8_t tryCount=0;
@@ -3342,8 +3436,6 @@ wl_status_t wifiManager(void) {
     return WiFi.status();
 }
 
-const char mqttTab[] PROGMEM = "<a class=\"nav-item nav-link\" id=\"nav-mqtt-tab\" data-toggle=\"tab\" href=\"#nav-mqtt\" role=\"tab\" aria-controls=\"nav-mqtt\" aria-selected=\"false\"><i class=\"fas fa-network-wired\"></i> MQTT</a>";
-const char ftpTab[] PROGMEM = "<a class=\"nav-item nav-link\" id=\"nav-ftp-tab\" data-toggle=\"tab\" href=\"#nav-ftp\" role=\"tab\" aria-controls=\"nav-ftp\" aria-selected=\"false\"><i class=\"fas fa-folder\"></i> FTP</a>";
 
 // Used for substitution of some variables/templates of html-files. Is called by webserver's template-engine
 String templateProcessor(const String& templ) {
@@ -3355,12 +3447,6 @@ String templateProcessor(const String& templ) {
         return String(ftpUserLength-1);
     } else if (templ == "FTP_PWD_LENGTH") {
         return String(ftpPasswordLength-1);
-    } else if (templ == "SHOW_FTP_TAB") {         // Only show FTP-tab if FTP-support was compiled
-        #ifdef FTP_ENABLE
-            return (String) FPSTR(ftpTab);
-        #else
-            return String();
-        #endif
     } else if (templ == "INIT_LED_BRIGHTNESS") {
         return String(prefsSettings.getUChar("iLedBrightness", 0));
     } else if (templ == "NIGHT_LED_BRIGHTNESS") {
@@ -3383,12 +3469,6 @@ String templateProcessor(const String& templ) {
         return String(prefsSettings.getUInt("vCheckIntv", voltageCheckInterval));
     } else if (templ == "MQTT_SERVER") {
         return prefsSettings.getString("mqttServer", "-1");
-    } else if (templ == "SHOW_MQTT_TAB") {        // Only show MQTT-tab if MQTT-support was compiled
-        #ifdef MQTT_ENABLE
-            return (String) FPSTR(mqttTab);
-        #else
-            return String();
-        #endif
     } else if (templ == "MQTT_ENABLE") {
         if (enableMqtt) {
             return String("checked=\"checked\"");
@@ -3933,31 +4013,97 @@ void convertUtf8ToAscii(String utf8String, char *asciiString) {
 // Handles file upload request from the explorer
 // requires a GET parameter path, as directory path to the file
 void explorerHandleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+
+    lastTimeActiveTimestamp = millis();
+
+    // New File
     if (!index) {
+        String utf8FilePath;
+        static char asciiFilePath[256];
         if (request->hasParam("path")) {
             AsyncWebParameter *param = request->getParam("path");
-            String utf8FilePath = param->value() + "/" + filename;
-            char asciiFilePath[256];
-            convertUtf8ToAscii(utf8FilePath, asciiFilePath);
-            request->_tempFile = FSystem.open( asciiFilePath, "w");
+            utf8FilePath = param->value() + "/" + filename;
+
         } else {
-            request->_tempFile = FSystem.open("/" + filename, "w");
+            utf8FilePath = "/" + filename;
         }
-        snprintf(logBuf, serialLoglength, "%s: %s", (char *) FPSTR(writingFile), filename);
-        loggerNl(logBuf, LOGLEVEL_INFO);
-        // open the file on first call and store the file handle in the request object
+        convertUtf8ToAscii(utf8FilePath, asciiFilePath);
+
+        // Create Ringbuffer for upload
+        if(explorerFileUploadRingBuffer == NULL) {
+            explorerFileUploadRingBuffer = xRingbufferCreate(4096, RINGBUF_TYPE_BYTEBUF);
+        }
+
+        // Create Queue for receiving a signal from the store task as synchronisation
+        if(explorerFileUploadStatusQueue == NULL) {
+            explorerFileUploadStatusQueue = xQueueCreate(1, sizeof(uint8_t));
+        }
+
+        // Create Task for handling the storage of the data
+        xTaskCreate(
+            explorerHandleFileStorageTask, /* Function to implement the task */
+            "fileStorageTask", /* Name of the task */
+            4000,  /* Stack size in words */
+            asciiFilePath,  /* Task input parameter */
+            2 | portPRIVILEGE_BIT,  /* Priority of the task */
+            &fileStorageTaskHandle  /* Task handle. */
+        );
+
     }
 
     if (len) {
-        // stream the incoming chunk to the opened file
-        request->_tempFile.write(data, len);
+        // stream the incoming chunk to the ringbuffer
+        xRingbufferSend(explorerFileUploadRingBuffer, data, len, portTICK_PERIOD_MS * 1000);
     }
 
     if (final) {
-        // close the file handle as the upload is now done
-        request->_tempFile.close();
+        // notify storage task that last data was stored on the ring buffer
+        xTaskNotify(fileStorageTaskHandle, 1u, eNoAction);
+        // watit until the storage task is sending the signal to finish
+        uint8_t signal;
+        xQueueReceive(explorerFileUploadStatusQueue, &signal, portMAX_DELAY);
+
+        // delete task
+        vTaskDelete(fileStorageTaskHandle);
     }
-    lastTimeActiveTimestamp = millis(); //prevent sleep
+}
+
+void explorerHandleFileStorageTask(void *parameter) {
+
+    File uploadFile;
+    size_t item_size;
+    uint8_t *item;
+    uint8_t value = 0;
+
+    BaseType_t uploadFileNotification;
+    uint32_t uploadFileNotificationValue;
+
+    uploadFile = FSystem.open((char *)parameter, "w");
+
+    snprintf(logBuf, serialLoglength, "%s: %s", (char *) FPSTR(writingFile), (char *) parameter);
+    loggerNl(logBuf, LOGLEVEL_INFO);
+
+    for(;;) {
+        esp_task_wdt_reset();
+
+        item = (uint8_t *)xRingbufferReceive(explorerFileUploadRingBuffer, &item_size, portTICK_PERIOD_MS * 100);
+        if (item != NULL) {
+            uploadFile.write(item, item_size);
+            vRingbufferReturnItem(explorerFileUploadRingBuffer, (void *)item);
+        } else {
+            // No data in the buffer, check if all data arrived for the file
+            uploadFileNotification = xTaskNotifyWait(0,0,&uploadFileNotificationValue,0);
+            if(uploadFileNotification == pdPASS) {
+                uploadFile.close();
+                // done exit loop to terminate
+                break;
+            }
+            vTaskDelay(portTICK_PERIOD_MS * 100);
+        }
+    }
+    // send signal to upload function to terminate
+    xQueueSend(explorerFileUploadStatusQueue, &value, 0);
+    vTaskDelete(NULL);
 }
 
 // Sends a list of the content of a directory as JSON file
@@ -4001,6 +4147,8 @@ void explorerHandleListRequest(AsyncWebServerRequest *request) {
         entry["dir"].set(file.isDirectory());
 
         file = root.openNextFile();
+
+        esp_task_wdt_reset();
 
     }
 
@@ -4047,6 +4195,7 @@ void explorerHandleDeleteRequest(AsyncWebServerRequest *request) {
         loggerNl("DELETE: No path variable set", LOGLEVEL_ERROR);
     }
     request->send(200);
+    esp_task_wdt_reset();
 }
 
 // Handles create request of a directory
@@ -4168,10 +4317,66 @@ void handleUpload(AsyncWebServerRequest *request, String filename, size_t index,
     #endif
 }
 
+// Print the wake-up reason why ESP32 is awake now
+void printWakeUpReason() {
+    esp_sleep_wakeup_cause_t wakeup_reason;
+    wakeup_reason = esp_sleep_get_wakeup_cause();
+
+    switch(wakeup_reason) {
+        case ESP_SLEEP_WAKEUP_EXT0 : Serial.println(F("Wakeup caused by push button")); break;
+        case ESP_SLEEP_WAKEUP_EXT1 : Serial.println(F("Wakeup caused by low power card detection")); break;
+        case ESP_SLEEP_WAKEUP_TIMER : Serial.println(F("Wakeup caused by timer")); break;
+        case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println(F("Wakeup caused by touchpad")); break;
+        case ESP_SLEEP_WAKEUP_ULP : Serial.println(F("Wakeup caused by ULP program")); break;
+        default : Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason); break;
+    }
+}
+
+#ifdef PN5180_ENABLE_LPCD
+    // wake up from LPCD, check card is present. This works only for ISO-14443 compatible cards
+    void checkCardIsPresentLPCD() {
+        static PN5180ISO14443 nfc14443(RFID_CS, RFID_BUSY, RFID_RST);
+        nfc14443.begin();
+        nfc14443.reset();
+        nfc14443.setupRF();
+        if (!nfc14443.isCardPresent()) {
+            nfc14443.clearIRQStatus(0xffffffff);
+            Serial.print(F("Logic level at PN5180' IRQ-PIN: ")); Serial.println(digitalRead(RFID_IRQ));
+            // turn on LPCD
+            uint16_t wakeupCounterInMs = 0x3FF; //  needs to be in the range of 0x0 - 0xA82. max wake-up time is 2960 ms.
+            if (nfc14443.switchToLPCD(wakeupCounterInMs)) {
+                loggerNl((char *) FPSTR(lowPowerCardSuccess), LOGLEVEL_INFO);
+                // configure wakeup pin for deep-sleep wake-up, use ext1
+                esp_sleep_enable_ext1_wakeup(BUTTON_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+                // freeze pin states in deep sleep
+                gpio_hold_en(gpio_num_t(RFID_CS));  // CS/NSS
+                gpio_hold_en(gpio_num_t(RFID_RST)); // RST
+                gpio_deep_sleep_hold_en();
+                loggerNl((char *) FPSTR(wakeUpRfidNoIso14443), LOGLEVEL_ERROR);
+                esp_deep_sleep_start();
+        } else {
+                Serial.println(F("switchToLPCD failed"));
+            }
+        }
+    }
+#endif
 
 void setup() {
     Serial.begin(115200);
     //esp_sleep_enable_ext0_wakeup((gpio_num_t) PREVIOUS_BUTTON, 0);
+    #ifdef PN5180_ENABLE_LPCD
+        // disable pin hold from deep sleep (LPCD)
+        gpio_deep_sleep_hold_dis();
+        gpio_hold_dis(gpio_num_t(RFID_CS)); // NSS
+        gpio_hold_dis(gpio_num_t(RFID_RST)); // RST
+        pinMode(RFID_IRQ, INPUT);
+        // check wakeup reason is a card detection
+        esp_sleep_wakeup_cause_t wakeup_reason;
+        wakeup_reason = esp_sleep_get_wakeup_cause();
+        if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT1) {
+            checkCardIsPresentLPCD();
+        }
+    #endif
     srand(esp_random());
     pinMode(POWER, OUTPUT);
     digitalWrite(POWER, HIGH);
@@ -4212,6 +4417,22 @@ void setup() {
             &LED,  /* Task handle. */
             0 /* Core where the task should run */
         );
+#if (HAL == 2)
+    i2cBusOne.begin(IIC_DATA, IIC_CLK, 40000);
+
+    while (not ac.begin()) {
+        Serial.println(F("AC101 Failed!"));
+        delay(1000);
+    }
+    Serial.println(F("AC101 via I2C - OK!"));
+
+    pinMode(22, OUTPUT);
+    digitalWrite(22, HIGH);
+
+    pinMode(GPIO_PA_EN, OUTPUT);
+    digitalWrite(GPIO_PA_EN, HIGH);
+    Serial.println(F("Built-in amplifier enabled\n"));
+#endif
     #endif
 
 
@@ -4270,8 +4491,15 @@ void setup() {
    Serial.println(F("  |_| |___|_|_|_____|_____|_|___|_____|   "));
    Serial.println(F("  ESP32-version"));
    Serial.println(F(""));
-
-   // show SD card type
+   // print wake-up reason
+   printWakeUpReason();
+   #ifdef PN5180_ENABLE_LPCD
+     // disable pin hold from deep sleep
+     gpio_deep_sleep_hold_dis();
+     gpio_hold_dis(gpio_num_t(RFID_CS)); // NSS
+     gpio_hold_dis(gpio_num_t(RFID_RST)); // RST
+   #endif
+  // show SD card type
     #ifdef SD_MMC_1BIT_MODE
       loggerNl((char *) FPSTR(sdMountedMmc1BitMode), LOGLEVEL_NOTICE);
       uint8_t cardType = SD_MMC.cardType();
@@ -4535,6 +4763,10 @@ void setup() {
 
             a2dp_sink.set_pin_config(pin_config);
             a2dp_sink.start("Tonuino");
+
+            #ifdef NEOPIXEL_ENABLE
+                showLedBT = true;
+            #endif
             
         }        
     #endif
@@ -4586,8 +4818,6 @@ void setup() {
         }
     #endif
 
-    // wakup prepare
-    print_wakeup_reason();
     esp_sleep_enable_ext1_wakeup(WAKUPMASK, ESP_EXT1_WAKEUP_ALL_LOW);
     
     if (operating_mode != BT_MODE) {
@@ -4722,20 +4952,4 @@ void audio_icyurl(const char *info) {  //homepage
 void audio_lasthost(const char *info) {  //stream URL played
     snprintf(logBuf, serialLoglength, "lasthost    : %s", info);
     loggerNl(logBuf, LOGLEVEL_INFO);
-}
-
-void print_wakeup_reason(){
-  esp_sleep_wakeup_cause_t wakeup_reason;
-
-  wakeup_reason = esp_sleep_get_wakeup_cause();
-
-  switch(wakeup_reason)
-  {
-    case ESP_SLEEP_WAKEUP_EXT0 : Serial.println("Wakeup caused by external signal using RTC_IO"); break;
-    case ESP_SLEEP_WAKEUP_EXT1 : Serial.println("Wakeup caused by external signal using RTC_CNTL"); break;
-    case ESP_SLEEP_WAKEUP_TIMER : Serial.println("Wakeup caused by timer"); break;
-    case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println("Wakeup caused by touchpad"); break;
-    case ESP_SLEEP_WAKEUP_ULP : Serial.println("Wakeup caused by ULP program"); break;
-    default : Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); break;
-  }
 }
