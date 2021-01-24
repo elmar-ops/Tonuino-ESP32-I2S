@@ -1624,7 +1624,7 @@ void playAudio(void *parameter) {
                     }
                     if (playProperties.currentTrackNumber > 0) {
                         // play previous track when current track time is small, else play current track again
-                        if(audio.getAudioCurrentTime() < 2) {
+                        if(audio.getAudioCurrentTime() < 15) {
                             playProperties.currentTrackNumber--;
                         }
                         if (playProperties.saveLastPlayPosition) {
@@ -4597,6 +4597,7 @@ void setup() {
         initVolume = nvsInitialVolume;
         snprintf(logBuf, serialLoglength, "%s: %u", (char *) FPSTR(restoredInitialLoudnessFromNvs), nvsInitialVolume);
         loggerNl(logBuf, LOGLEVEL_INFO);
+        currentVolume = initVolume;
     } else {
         prefsSettings.putUInt("initVolume", initVolume);
         loggerNl((char *) FPSTR(wroteInitialLoudnessToNvs), LOGLEVEL_ERROR);
