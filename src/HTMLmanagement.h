@@ -4,15 +4,15 @@ static const char management_HTML[] PROGMEM = "<!DOCTYPE html>\
     <title>ESPuino-Konfiguration</title>\
     <meta charset=\"utf-8\">\
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
-    <link rel=\"stylesheet\" href=\"https://ts-cs.de/tonuino/css/bootstrap.min.css\">\
+    <link rel=\"stylesheet\" href=\"https://espuino.de/espuino/css/bootstrap.min.css\">\
     <link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/jstree/3.2.1/themes/default/style.min.css\"/>\
     <link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css\"/>\
     <link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css\"/>\
     <link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/bootstrap-slider/11.0.2/css/bootstrap-slider.min.css\" />\
-    <script src=\"https://ts-cs.de/tonuino/js/jquery.min.js\"></script>\
+    <script src=\"https://espuino.de/espuino/js/jquery.min.js\"></script>\
     <script src=\"https://code.jquery.com/ui/1.12.0/jquery-ui.min.js\"></script>\
-    <script src=\"https://ts-cs.de/tonuino/js/popper.min.js\"></script>\
-    <script src=\"https://ts-cs.de/tonuino/js/bootstrap.min.js\"></script>\
+    <script src=\"https://espuino.de/espuino/js/popper.min.js\"></script>\
+    <script src=\"https://espuino.de/espuino/js/bootstrap.min.js\"></script>\
     <script src=\"https://cdnjs.cloudflare.com/ajax/libs/jstree/3.2.1/jstree.min.js\"></script>\
     <script src=\"https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js\"></script>\
     <script src=\"https://cdnjs.cloudflare.com/ajax/libs/bootstrap-slider/11.0.2/bootstrap-slider.min.js\"></script>\
@@ -105,9 +105,7 @@ static const char management_HTML[] PROGMEM = "<!DOCTYPE html>\
 <nav class=\"navbar navbar-expand-sm bg-primary navbar-dark\">\
     <div class=\"col-md-12\">\
     <a class=\"float-left navbar-brand\">\
-        <img src=\"https://raw.githubusercontent.com/biologist79/Tonuino-ESP32-I2S/master/html/tonuino_logo.png\"\
-             width=\"30\" height=\"30\" class=\"d-inline-block align-top\" alt=\"\"/>\
-        Tonuino\
+        ESPuino\
     </a>\
 \
     <a class=\"reboot float-right nav-link\" href=\"/restart\"><i class=\"fas fa-power-off\"></i> Neustart</a>\
@@ -117,7 +115,6 @@ static const char management_HTML[] PROGMEM = "<!DOCTYPE html>\
     <nav>\
         <div class=\"container nav nav-tabs\" id=\"nav-tab\" role=\"tablist\">\
             <a class=\"nav-item nav-link active\" id=\"nav-rfid-tab\" data-toggle=\"tab\" href=\"#nav-rfid\" role=\"tab\" aria-controls=\"nav-rfid\" aria-selected=\"true\"><i class=\"fas fa-dot-circle\"></i> RFID</a>\
-            <a class=\"nav-item nav-link\" id=\"nav-files-tab\" data-toggle=\"tab\" href=\"#nav-files\" role=\"tab\" aria-controls=\"nav-files\" aria-selected=\"false\"><i class=\"fas fa-folder\"></i> Dateien</a>\
             <a class=\"nav-item nav-link\" id=\"nav-wifi-tab\" data-toggle=\"tab\" href=\"#nav-wifi\" role=\"tab\" aria-controls=\"nav-wifi\" aria-selected=\"false\"><i class=\"fas fa-wifi\"></i><span class=\".d-sm-none .d-md-block\"> WLAN</span></a>\
             %SHOW_MQTT_TAB%\
             %SHOW_FTP_TAB%\
@@ -127,21 +124,6 @@ static const char management_HTML[] PROGMEM = "<!DOCTYPE html>\
     </nav>\
 <br>\
 <div class=\"tab-content\" id=\"nav-tabContent\">\
-    <div class=\"tab-pane fade\" id=\"nav-files\" role=\"tabpanel\" aria-labelledby=\"nav-files-tab\">\
-        <div class=\"container\" id=\"fileExplorer\">\
-            <div class=\"ui-widget\">\
-                <div class=\"filetree demo\" id=\"explorerTree\"></div>\
-\
-                <form id=\"explorerUploadForm\" method=\"POST\" enctype=\"multipart/form-data\" action=\"/explorer\" accept-charset=\"iso-8859-1\">\
-                    <input id=\"explorerUploadedFiles\" type=\"file\" class=\"form-control-file\" name=\"explorerUploadFiles\" multiple> <input type=\"submit\" class=\"btn btn-primary\" id=\"submit\" value=\"Hochladen\">\
-                </form>\
-                <div>\
-                    <progress id=\"explorerUploadProgress\" style=\"margin-top:10px\" value=\"0\" max=\"100\"></progress> <span id=\"explorerUploadPercent\"></span>\
-                </div>\
-\
-            </div>\
-        </div>\
-    </div>\
     <div class=\"tab-pane fade\" id=\"nav-wifi\" role=\"tabpanel\" aria-labelledby=\"nav-wifi-tab\">\
         <div class=\"container\" id=\"wifiConfig\">\
             <form action=\"#wifiConfig\" method=\"POST\" onsubmit=\"wifiConfig('wifiConfig'); return false\">\
@@ -153,8 +135,8 @@ static const char management_HTML[] PROGMEM = "<!DOCTYPE html>\
                     </div>\
                     <label for=\"pwd\">Passwort:</label>\
                     <input type=\"password\" class=\"form-control\" id=\"pwd\" placeholder=\"Passwort\" name=\"pwd\" required>\
-                    <label for=\"hostname\">Tonuino-Name (Hostname):</label>\
-                    <input type=\"text\" class=\"form-control\" id=\"hostname\" placeholder=\"tonuino\" name=\"hostname\"\
+                    <label for=\"hostname\">ESPuino-Name (Hostname):</label>\
+                    <input type=\"text\" class=\"form-control\" id=\"hostname\" placeholder=\"espuino\" name=\"hostname\"\
                            value=\"%HOSTNAME%\" pattern=\"^[^-\\.]{2,32}\" required>\
                 </div>\
                 <br>\
@@ -166,6 +148,22 @@ static const char management_HTML[] PROGMEM = "<!DOCTYPE html>\
         </div>\
     </div>\
     <div class=\"tab-pane fade show active\" id=\"nav-rfid\" role=\"tabpanel\" aria-labelledby=\"nav-rfid-tab\">\
+        <div class=\"container\" id=\"filetreeContainer\">\
+            <fieldset>\
+                <legend>Dateien</legend>\
+				<div class=\"filetree-container\">\
+				<div id=\"filebrowser\">\
+					<div class=\"filetree demo\" id=\"explorerTree\"></div>\
+				</div>\
+				<div>\
+					<form id=\"explorerUploadForm\" method=\"POST\" enctype=\"multipart/form-data\" action=\"/explorer\" accept-charset=\"iso-8859-1\">\
+						<input id=\"explorerUploadedFiles\" type=\"file\" class=\"form-control-file\" name=\"explorerUploadFiles\" multiple> <input type=\"submit\" class=\"btn btn-primary\" id=\"submit\" value=\"Hochladen\">\
+						<progress id=\"explorerUploadProgress\" value=\"0\" max=\"100\"></progress> <span id=\"explorerUploadPercent\"></span>\
+					</form>\
+\
+				</div>\
+            </fieldset>\
+        </div>\
         <div class=\"container\" id=\"rfidMusicTags\">\
             <fieldset>\
                 <legend>RFID-Zuweisungen</legend>\
@@ -175,21 +173,7 @@ static const char management_HTML[] PROGMEM = "<!DOCTYPE html>\
                     <input type=\"text\" class=\"form-control\" id=\"rfidIdMusic\" maxlength=\"12\" pattern=\"[0-9]{12}\"\
                            placeholder=\"%RFID_TAG_ID%\" name=\"rfidIdMusic\" required>\
                     <label for=\"fileOrUrl\">Datei, Verzeichnis oder URL (^ und # als Zeichen nicht erlaubt)</label>\
-                    <input type=\"text\" class=\"form-control\" id=\"fileOrUrl\" maxlength=\"255\" placeholder=\"z.B. /mp3/Hoerspiele/Yakari/Yakari_und_seine_Freunde.mp3\" pattern=\"^[^\\^#]+$\" name=\"fileOrUrl\" required>\
-                    <div class=\"filetree-container\">\
-                        <div id=\"filebrowser\">\
-                            <div class=\"filetree demo\" id=\"filetree\"></div>\
-                            <div class=\"refreshAction\">\
-                                <span id=\"refreshAction\" data-toggle=\"tooltip\" data-placement=\"top\" title=\"Datei Liste aktualisieren.\"><i class=\"fas fa-sync fa-1x\"></i> Dateiliste aktualisieren</span>\
-                            </div>\
-                        </div>\
-                        <div id=\"indexing-progress\" class=\"indexing-progress overlay\">\
-                            <div style=\"text-align: center; color:white; margin-top:2em;\">\
-                                <div><i class=\"fas fa-sync fa-spin fa-2x\"></i> <br><br>  Der Prozess kann mehrere Minuten dauern...</div>\
-                                <div id=\"currentProcessedFile\"></div>\
-                            </div>\
-                        </div>\
-                    </div>\
+                    <input type=\"text\" class=\"form-control\" id=\"fileOrUrl\" maxlength=\"255\" placeholder=\"z.B. /mp3/Hoerspiele/Yakari/Yakari_und_seine_Freunde.mp3\" name=\"fileOrUrl\" required>\
                     <label for=\"playMode\">Abspielmodus</label>\
                     <select class=\"form-control\" id=\"playMode\" name=\"playMode\">\
                         <option class=\"option-file\" value=\"1\">Einzelner Titel</option>\
@@ -225,7 +209,7 @@ static const char management_HTML[] PROGMEM = "<!DOCTYPE html>\
                     <div class=\"invalid-feedback\">\
                         Bitte eine 12-stellige Zahl eingeben.\
                     </div>\
-                    <label for=\"modId\">Konfiguraiton</label>\
+                    <label for=\"modId\">Konfiguration</label>\
                     <select class=\"form-control\" id=\"modId\" name=\"modId\">\
                         <option value=\"100\">Tastensperre</option>\
                         <option value=\"101\">Schlafen nach 15 Minuten</option>\
@@ -593,8 +577,6 @@ static const char management_HTML[] PROGMEM = "<!DOCTYPE html>\
 \
 					}\
 \
-                    Sleep(1000);\
-\
 				  }\
 				}, false);\
 \
@@ -620,23 +602,10 @@ static const char management_HTML[] PROGMEM = "<!DOCTYPE html>\
 	function handleDeleteData(nodeId) {\
 		var ref = $('#explorerTree').jstree(true);\
 		var node = ref.get_node(nodeId);\
-		var children = $(\"#explorerTree\").jstree(\"get_children_dom\",nodeId);\
-		console.log(children.length);\
-		if(node.data.directory) {\
-			if(children.length > 0) {\
-				for(var i=0;i<children.length;i++)\
-				{\
-					console.log(\"call delete function for: \" + children[i].text);\
-					handleDeleteData(children[i].id);\
-				}\
-			}\
-		}\
 		console.log(\"call delete request: \" + node.data.path);\
 		deleteData(\"/explorer?path=\" + node.data.path);\
 	}\
-    function Sleep(milliseconds) {\
-     return new Promise(resolve => setTimeout(resolve, milliseconds));\
-    }\
+\
 	function fileNameSort( a, b ) {\
 		if ( a.dir && !b.dir ) {\
 			return -1\
@@ -656,11 +625,16 @@ static const char management_HTML[] PROGMEM = "<!DOCTYPE html>\
 	function createChild(nodeId, data) {\
 		var ref = $('#explorerTree').jstree(true);\
 		var node = ref.get_node(nodeId);\
+		var parentNodePath = node.data.path;\
+		/* In case of root node remove leading '/' to avoid '//' */\
+		if(parentNodePath == \"/\"){\
+			parentNodePath = \"\";\
+		}\
 		var child = {\
 			text: data.name,\
 			type: getType(data),\
 			data: {\
-				path: node.data.path + \"/\" + data.name,\
+				path: parentNodePath + \"/\" + data.name,\
 				directory: data.dir\
 			}\
 		};\
@@ -852,93 +826,6 @@ static const char management_HTML[] PROGMEM = "<!DOCTYPE html>\
 	} /* buildFileSystemTree */\
 \
     /* File Explorer functions end */\
-    function renderFileTree() {\
-\
-        var filesURI = \"/files\";\
-        if (DEBUG) {\
-            filesURI = \"http://\" + host + \"/files\";\
-        }\
-        $('#filetree').jstree({\
-            'core': {\
-                'check_callback': true,\
-                'data': {\
-                    url: filesURI,\
-                    error: function (XMLHttpRequest, textStatus, errorThrown) {\
-                        $('#j1_loading').hide();\
-                        $(\"#refreshAction\").hide();\
-                        $('#filetree').html(\"<div class='clickForRefresh' ><i class='fas fa-sync fa-1x'><span id='#clickForRefresh' > Dateien suchen.</span></div>\");\
-                        $('#filetree').on(\"click\", function () {\
-                            refreshFileList();\
-                        });\
-                        toastr.error(\"Die Verzeichnis-Liste konnte nicht geladen werden.\");\
-                    }\
-                },\
-\
-            },\
-            'types': {\
-                'folder': {\
-                    'icon': \"fa fa-folder\"\
-                },\
-                'file': {\
-                    'icon': \"fa fa-file\"\
-                },\
-                'audio': {\
-                    'icon': \"fa fa-file-audio\"\
-                },\
-                'default': {\
-                    'icon': \"fa fa-folder\"\
-                }\
-            },\
-            'plugins': [\"themes\", \"types\"]\
-        }).bind('loaded.jstree', function (event, data) {\
-            postRendering(event, data);\
-            if ((data.instance._model.data['#']['children'].length == 0)) {\
-                toastr.info(\"Der SD-Karten-Index muss erzeugt werden.\");\
-            }\
-        }).bind('refresh.jstree', function (event, data) {\
-            postRendering(event, data);\
-        });\
-    }\
-\
-    $('#filetree').on('select_node.jstree', function (e, data) {\
-        $('input[name=fileOrUrl]').val(data.node.id);\
-\
-        if (data.node.type == \"folder\") {\
-            $('.option-folder').show();\
-            $('.option-file').hide();\
-            $('#playMode option').removeAttr('selected').filter('[value=3]').attr('selected', true);\
-        }\
-\
-        if (data.node.type == \"audio\") {\
-            $('.option-file').show();\
-            $('.option-folder').hide();\
-            $('#playMode option').removeAttr('selected').filter('[value=1]').attr('selected', true);\
-        }\
-    });\
-\
-    $('#refreshAction').on(\"click\", function () {\
-        refreshFileList();\
-        $(\"#indexing-progress\").show();\
-        $(\"#refreshAction\").hide();\
-    });\
-\
-    $('#playMode').on(\"change\", function () {\
-        if (this.value == 8) {\
-            $('#filebrowser').slideUp();\
-        } else {\
-            $('#filebrowser').slideDown();\
-        }\
-    });\
-\
-    function showFileIndexingState() {\
-        $(\"#indexing-progress\").show();\
-        $(\"#refreshAction\").hide();\
-    }\
-\
-    function hideFileIndexingState() {\
-        $(\"#indexing-progress\").hide();\
-        $(\"#refreshAction\").show();\
-    }\
 \
     var socket = undefined;\
     var tm;\
@@ -981,17 +868,6 @@ static const char management_HTML[] PROGMEM = "<!DOCTYPE html>\
               if (socketMsg.pong == 'pong') {\
                   pong();\
               }\
-          } if (\"refreshFileList\" in socketMsg) {\
-              hideFileIndexingState();\
-              toastr.info(\"Die Dateiliste wurde neu erzeugt!\");\
-              $('#filetree').jstree(true).refresh();\
-\
-          }\
-          if (\"indexingState\" in socketMsg) {\
-              if(socketMsg.indexingState != null) {\
-                  $(\"#currentProcessedFile\").text(socketMsg.indexingState);\
-                  console.log(socketMsg.indexingState);\
-              }\
           }\
       };\
     }\
@@ -1005,24 +881,13 @@ static const char management_HTML[] PROGMEM = "<!DOCTYPE html>\
         var myJSON = JSON.stringify(myObj);\
         socket.send(myJSON);\
         tm = setTimeout(function () {\
-            toastr.warning('Die Verbindung zum Tonuino ist unterbrochen! Bitte Seite neu laden.');\
+            toastr.warning('Die Verbindung zum ESPuino ist unterbrochen! Bitte Seite neu laden.');\
         }, 5000);\
     }\
 \
     function pong() {\
         clearTimeout(tm);\
     }\
-\
-    function refreshFileList(clickedId) {\
-        lastIdclicked = clickedId;\
-        var myObj = {\
-            \"refreshFileList\": true\
-        };\
-        var myJSON = JSON.stringify(myObj);\
-        $(\"#refreshAction\").hide();\
-        socket.send(myJSON);\
-        showFileIndexingState();\
-    };\
 \
     function genSettings(clickedId) {\
         lastIdclicked = clickedId;\
@@ -1123,7 +988,6 @@ static const char management_HTML[] PROGMEM = "<!DOCTYPE html>\
 \
     $(document).ready(function () {\
         connect();\
-        renderFileTree();\
 		buildFileSystemTree(\"/\");\
 \
         console.log(parseInt(document.getElementById('warningLowVoltage').value));\

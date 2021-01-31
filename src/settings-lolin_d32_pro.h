@@ -38,6 +38,8 @@
 #ifdef RFID_READER_TYPE_PN5180
     #define RFID_BUSY                   33          // PN5180 BUSY PIN
     #define RFID_RST                    22          // PN5180 RESET PIN
+    #define RFID_IRQ                    39          // PN5180 IRQ PIN (only needed for low power card detection)
+	#define BUTTON_PIN_BITMASK          0x8000000000// 2^RFID_IRQ in hex
 #endif
 // I2S (DAC)
 #define I2S_DOUT                        25          // Digital out (I2S)
@@ -47,7 +49,7 @@
 // Rotary encoder
 #define DREHENCODER_CLK                 34          // If you want to reverse encoder's direction, just switch GPIOs of CLK with DT (in software or hardware)
 #define DREHENCODER_DT                  39          // 39 = 'VN'
-#define DREHENCODER_BUTTON              36          // Button is used to switch Tonuino on and off; 36 = 'VP'
+#define DREHENCODER_BUTTON              36          // Button is used to switch ESPuino on and off; 36 = 'VP'
 
 // Control-buttons
 #define PAUSEPLAY_BUTTON                32          // GPIO to detect pause/play
