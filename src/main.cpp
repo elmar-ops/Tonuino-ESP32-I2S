@@ -1,7 +1,9 @@
 // !!! MAKE SURE TO EDIT settings.h !!!
 
 #include "settings.h"                       // Contains all user-relevant settings
-#include "audiomenu.h"         
+#include "audiomenu.h"     
+#include "esp32-hal-bt.h"   
+#include "esp_bt.h" 
 
 // !!! MAKE SURE TO EDIT PLATFORM SPECIFIC settings-****.h !!!
 #if (HAL == 1)
@@ -2417,12 +2419,17 @@ void deepSleepManager(void) {
         /*SPI.end();
         spiSD.end();*/
         digitalWrite(POWER, LOW);
+        digitalWrite(RST_PIN, LOW);
         esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
         //rtc_gpio_pullup_en(GPIO_NUM_4);
         //rtc_gpio_pulldown_dis(GPIO_NUM_4);
         // only pin 32 - 39 are available in ext1!
-        rtc_gpio_pullup_en(GPIO_NUM_33);
+        rtc_gpio_pullup_en(GPIO_NUM_32);
+        rtc_gpio_pulldown_dis(GPIO_NUM_32);
+         rtc_gpio_pullup_en(GPIO_NUM_33);
         rtc_gpio_pulldown_dis(GPIO_NUM_33);
+         rtc_gpio_pullup_en(GPIO_NUM_34);
+        rtc_gpio_pulldown_dis(GPIO_NUM_34);
         delay(200);
         #ifdef PN5180_ENABLE_LPCD
             // prepare and go to low power card detection mode
@@ -4706,8 +4713,8 @@ void setup() {
 
     if (operating_mode != BT_MODE) {
         Serial.printf("\n****Before BLEDevice::deinit ESP.getFreeHeap() %u\n",ESP.getFreeHeap());
-        //esp_bt_controller_deinit();
-        //esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
+        esp_bt_controller_deinit();
+        esp_bt_mem_release(ESP_BT_MODE_BTDM);
         Serial.printf("\n****After BLEDevice::deinit ESP.getFreeHeap() %u\n",ESP.getFreeHeap());
     }
 
