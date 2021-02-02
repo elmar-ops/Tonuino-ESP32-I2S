@@ -57,10 +57,10 @@
 #define DREHENCODER_BUTTON              99          // Button is used to switch Tonuino on and off
 
 // GPIOs (Control-buttons)
-#define PAUSEPLAY_BUTTON                32
-#define NEXT_BUTTON                     34
+#define PAUSEPLAY_BUTTON                31
+#define NEXT_BUTTON                     32
 #define PREVIOUS_BUTTON                 33           // Please note: as of 19.11.2020 changed from 33 to 2
-#define WAKUPMASK                       0x700000000  // 32-34     
+#define WAKUPMASK                       0x300000000  // 32-33     
 
 // (optional) Power-control
 #define POWER                           99          // GPIO used to drive transistor-circuit, that switches off peripheral devices while ESP32-deepsleep

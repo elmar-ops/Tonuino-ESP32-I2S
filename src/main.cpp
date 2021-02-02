@@ -2405,8 +2405,10 @@ void deepSleepManager(void) {
             spiSD.end();*/
         #endif
         #ifdef BLUETOOTH_ENABLE
-            esp_bluedroid_disable();
-            esp_bt_controller_disable();
+            if (operating_mode == BT_MODE) {
+              esp_bluedroid_disable();
+              esp_bt_controller_disable();
+            }
         #endif
         esp_wifi_stop();
 
@@ -2421,15 +2423,12 @@ void deepSleepManager(void) {
         digitalWrite(POWER, LOW);
         digitalWrite(RST_PIN, LOW);
         esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
-        //rtc_gpio_pullup_en(GPIO_NUM_4);
-        //rtc_gpio_pulldown_dis(GPIO_NUM_4);
         // only pin 32 - 39 are available in ext1!
+        // pin 34-39 have no pullup!
         rtc_gpio_pullup_en(GPIO_NUM_32);
         rtc_gpio_pulldown_dis(GPIO_NUM_32);
-         rtc_gpio_pullup_en(GPIO_NUM_33);
+        rtc_gpio_pullup_en(GPIO_NUM_33);
         rtc_gpio_pulldown_dis(GPIO_NUM_33);
-         rtc_gpio_pullup_en(GPIO_NUM_34);
-        rtc_gpio_pulldown_dis(GPIO_NUM_34);
         delay(200);
         #ifdef PN5180_ENABLE_LPCD
             // prepare and go to low power card detection mode
@@ -4644,7 +4643,7 @@ void setup() {
             };
 
             a2dp_sink.set_pin_config(pin_config);
-            a2dp_sink.start("Tonuino");
+            a2dp_sink.start("ESPuino");
 
             #ifdef NEOPIXEL_ENABLE
                 showLedBT = true;
