@@ -2032,6 +2032,7 @@ void showLed(void *parameter) {
         }
 
         if (showLedError) {             // If error occured (e.g. RFID-modification not accepted)
+            Serial.println(F("showLedError"));
             showLedError = false;
             notificationShown = true;
             FastLED.clear();
@@ -2301,16 +2302,16 @@ void showLed(void *parameter) {
                             FastLED.clear();
                             for (uint8_t led = 0; led < numLedsToLight; led++) {
                                 if (lockControls) {
-                                    leds[ledAddress(led)] = CRGB::Red;
+                                    leds[ledAddress(led)] = CRGB::Black;
                                 } else if (!playProperties.pausePlay) { // Hue-rainbow
                                     leds[ledAddress(led)].setHue((uint8_t) (85 - ((double) 95 / NUM_LEDS) * led));
                                 }
                             }
                             if (playProperties.pausePlay) {
-                                leds[ledAddress(0)] = CRGB::Orange;
-                                    leds[(ledAddress(NUM_LEDS/4)) % NUM_LEDS] = CRGB::Orange;
-                                    leds[(ledAddress(NUM_LEDS/2)) % NUM_LEDS] = CRGB::Orange;
-                                    leds[(ledAddress(NUM_LEDS/4*3)) % NUM_LEDS] = CRGB::Orange;
+                                leds[ledAddress(0)] = CRGB::Black;
+                                    leds[(ledAddress(NUM_LEDS/4)) % NUM_LEDS] = CRGB::Black;
+                                    leds[(ledAddress(NUM_LEDS/2)) % NUM_LEDS] = CRGB::Black;
+                                    leds[(ledAddress(NUM_LEDS/4*3)) % NUM_LEDS] = CRGB::Black;
                                     break;
                             }
                         }
@@ -2331,8 +2332,8 @@ void showLed(void *parameter) {
                                 leds[ledAddress(ledPosWebstream)].setHue(webstreamColor);
                                 leds[(ledAddress(ledPosWebstream)+NUM_LEDS/2) % NUM_LEDS].setHue(webstreamColor++);
                             } else if (playProperties.pausePlay) {
-                                leds[ledAddress(ledPosWebstream)] = CRGB::Orange;
-                                leds[(ledAddress(ledPosWebstream)+NUM_LEDS/2) % NUM_LEDS] = CRGB::Orange;
+                                leds[ledAddress(ledPosWebstream)] = CRGB::Black;
+                                leds[(ledAddress(ledPosWebstream)+NUM_LEDS/2) % NUM_LEDS] = CRGB::Black;
                             }
                         }
                     }
@@ -2408,8 +2409,10 @@ void deepSleepManager(void) {
         sleeping = true;
         #ifndef RFID_READER_TYPE_PN5180
           digitalWrite(RST_PIN, LOW);  // RFID
+          digitalWrite(LED_PIN, LOW);  // LED
           mfrc522->PCD_SoftPowerDown();
         #endif
+        
         loggerNl(serialDebug, (char *) FPSTR(goToSleepNow), LOGLEVEL_NOTICE);
         #ifdef MQTT_ENABLE
             publishMqtt((char *) FPSTR(topicState), "Offline", false);
@@ -2450,6 +2453,7 @@ void deepSleepManager(void) {
             // prepare and go to low power card detection mode
             gotoLPCD();
         #endif
+        rtc_gpio_isolate((gpio_num_t)  GPIO_NUM_12);
         Serial.println(F("deep-sleep, good night......."));
         esp_deep_sleep_start();
     }
@@ -4445,11 +4449,7 @@ void setup() {
 
     //Print the wakeup reason for ESP32
     print_wakeup_reason();
-    
-    //Print the GPIO used to wake up
-    print_GPIO_wake_up();
-
-    
+      
     // Get some stuff from NVS...
     // Get initial LED-brightness from NVS
 
@@ -4901,15 +4901,6 @@ void audio_icyurl(const char *info) {  //homepage
 void audio_lasthost(const char *info) {  //stream URL played
     snprintf(logBuf, serialLoglength, "lasthost    : %s", info);
     loggerNl(serialDebug, logBuf, LOGLEVEL_INFO);
-}
-
-void print_GPIO_wake_up(){
-    unsigned int GPIO_reason = esp_sleep_get_ext1_wakeup_status();
-    unsigned int GPIO_reason_log = (log(GPIO_reason))/log(2);
-    Serial.print(F("GPIO_REASON: "));
-    Serial.println(GPIO_reason);
-    Serial.print(F("GPIO_REASON_LOG: "));
-    Serial.println(GPIO_reason_log);
 }
 
 void print_wakeup_reason(){
