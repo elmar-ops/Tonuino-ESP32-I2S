@@ -4368,7 +4368,7 @@ void setup() {
         #endif
     #else
         #ifdef SD_MMC_1BIT_MODE
-            pinMode(2, INPUT_PULLUP);
+            //pinMode(2, INPUT_PULLUP);
             while (!SD_MMC.begin("/sdcard", true)) {
         #else
             while (!SD.begin(SPISD_CS)) {
