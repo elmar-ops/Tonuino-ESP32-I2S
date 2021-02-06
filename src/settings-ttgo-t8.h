@@ -63,7 +63,9 @@
 #define PAUSEPLAY_BUTTON                34           // 34 needs external pullup!            
 #define NEXT_BUTTON                     36           // 36 needs external pullup!       
 #define PREVIOUS_BUTTON                 39           // 39 needs external pullup!       
-#define WAKUPMASK                       0x9400000000  // 34,36,39     
+#define WAKUPMASK1                      0x1000000000 //34     
+#define WAKUPMASK2                      0x400000000  //36
+#define WAKUPMASK3                      0x8000000000 //39
 
 // (optional) Power-control
 #define POWER                           99          // GPIO used to drive transistor-circuit, that switches off peripheral devices while ESP32-deepsleep

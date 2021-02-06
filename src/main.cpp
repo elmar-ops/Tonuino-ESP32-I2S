@@ -91,6 +91,9 @@
 uint8_t serialLoglength = 200;
 char *logBuf = (char*) calloc(serialLoglength, sizeof(char)); // Buffer for all log-messages
 
+// FilePathLength
+#define MAX_FILEPATH_LENTGH 256
+
 #ifdef HEADPHONE_ADJUST_ENABLE
     bool headphoneLastDetectionState;
     uint32_t headphoneLastDetectionTimestamp = 0;
@@ -153,7 +156,6 @@ char *logBuf = (char*) calloc(serialLoglength, sizeof(char)); // Buffer for all 
 #define TRACK                           1           // Repeat current track (infinite loop)
 #define PLAYLIST                        2           // Repeat whole playlist (infinite loop)
 #define TRACK_N_PLAYLIST                3           // Repeat both (infinite loop)
-
 
 typedef struct { // Bit field
     uint8_t playMode:                   4;      // playMode
@@ -389,6 +391,7 @@ void freeMultiCharArray(char **arr, const uint32_t cnt);
 uint8_t getRepeatMode(void);
 bool getWifiEnableStatusFromNVS(void);
 void handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
+void convertAsciiToUtf8(String asciiString, char *utf8String);
 void convertUtf8ToAscii(String utf8String, char *asciiString);
 void explorerHandleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
 void explorerHandleFileStorageTask(void *parameter);
@@ -431,6 +434,9 @@ void volumeHandler(const int32_t _minVolume, const int32_t _maxVolume);
 void volumeToQueueSender(const int32_t _newVolume);
 wl_status_t wifiManager(void);
 bool writeWifiStatusToNVS(bool wifiStatus);
+void playAudioMenu(String filename);
+void print_wakeup_reason(void);
+void print_GPIO_wake_up(void);
 
 /* Wrapper-function for serial-logging (with newline)
     _currentLogLevel: loglevel that's currently active
@@ -452,6 +458,14 @@ void logger(const uint8_t _currentLogLevel, const char *_logBuffer, const uint8_
   }
 }
 
+void playAudioMenu(String filename) {
+    uint32_t playMode;
+    static char filePath[MAX_FILEPATH_LENTGH];
+    convertUtf8ToAscii(filename, filePath);
+    playMode = 1;
+    trackQueueDispatcher(filePath,0,playMode,0);
+}
+
 
 int countChars(const char* string, char ch) {
     int count = 0;
@@ -465,7 +479,6 @@ int countChars(const char* string, char ch) {
 
     return count;
 }
-
 
 void IRAM_ATTR onTimer() {
   xSemaphoreGiveFromISR(timerSemaphore, NULL);
@@ -509,7 +522,7 @@ void IRAM_ATTR onTimer() {
         return (averagedAnalogValue / maxAnalogValue) * referenceVoltage * factor + offsetVoltage;
     }
 
-    // Measureas voltage of a battery as per interval or after bootup (after allowing a few seconds to settle down)
+    // Measures voltage of a battery as per interval or after bootup (after allowing a few seconds to settle down)
     void batteryVoltageTester(void) {
         if ((millis() - lastVoltageCheckTimestamp >= voltageCheckInterval*60000) || (!lastVoltageCheckTimestamp && millis()>=10000)) {
             float voltage = measureBatteryVoltage();
@@ -2429,12 +2442,13 @@ void deepSleepManager(void) {
 
         /*SPI.end();
         spiSD.end();*/
+        Serial.flush();
         digitalWrite(POWER, LOW);
         #ifndef RFID_READER_TYPE_PN5180
           digitalWrite(RST_PIN, LOW);  // RFID
         #endif
         //esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
-        
+        // only pin 32 - 39 are available in ext1!
         #ifdef PN5180_ENABLE_LPCD
             // prepare and go to low power card detection mode
             gotoLPCD();
@@ -2465,37 +2479,37 @@ void trackControlToQueueSender(const uint8_t trackCommand) {
 }
 
 #ifdef USE_ENCODER
-    // Handles volume directed by rotary encoder
-    void volumeHandler(const int32_t _minVolume, const int32_t _maxVolume) {
-        if (lockControls) {
-            encoder.clearCount();
-            encoder.setCount(currentVolume*2);
-            return;
-        }
+// Handles volume directed by rotary encoder
+void volumeHandler(const int32_t _minVolume, const int32_t _maxVolume) {
+    if (lockControls) {
+        encoder.clearCount();
+        encoder.setCount(currentVolume*2);
+        return;
+    }
 
-        currentEncoderValue = encoder.getCount();
-        // Only if initial run or value has changed. And only after "full step" of rotary encoder
-        if (((lastEncoderValue != currentEncoderValue) || lastVolume == -1) && (currentEncoderValue % 2 == 0)) {
-            lastTimeActiveTimestamp = millis();        // Set inactive back if rotary encoder was used
-            if (_maxVolume * 2 < currentEncoderValue) {
-                encoder.clearCount();
-                encoder.setCount(_maxVolume * 2);
-                loggerNl(serialDebug, (char *) FPSTR(maxLoudnessReached), LOGLEVEL_INFO);
-                currentEncoderValue = encoder.getCount();
-            } else if (currentEncoderValue < _minVolume) {
-                encoder.clearCount();
-                encoder.setCount(_minVolume);
-                loggerNl(serialDebug, (char *) FPSTR(minLoudnessReached), LOGLEVEL_INFO);
-                currentEncoderValue = encoder.getCount();
-            }
-            lastEncoderValue = currentEncoderValue;
-            currentVolume = lastEncoderValue / 2;
-            if (currentVolume != lastVolume) {
-                lastVolume = currentVolume;
-                volumeToQueueSender(currentVolume);
-            }
+    currentEncoderValue = encoder.getCount();
+    // Only if initial run or value has changed. And only after "full step" of rotary encoder
+    if (((lastEncoderValue != currentEncoderValue) || lastVolume == -1) && (currentEncoderValue % 2 == 0)) {
+        lastTimeActiveTimestamp = millis();        // Set inactive back if rotary encoder was used
+        if (_maxVolume * 2 < currentEncoderValue) {
+            encoder.clearCount();
+            encoder.setCount(_maxVolume * 2);
+            loggerNl(serialDebug, (char *) FPSTR(maxLoudnessReached), LOGLEVEL_INFO);
+            currentEncoderValue = encoder.getCount();
+        } else if (currentEncoderValue < _minVolume) {
+            encoder.clearCount();
+            encoder.setCount(_minVolume);
+            loggerNl(serialDebug, (char *) FPSTR(minLoudnessReached), LOGLEVEL_INFO);
+            currentEncoderValue = encoder.getCount();
+        }
+        lastEncoderValue = currentEncoderValue;
+        currentVolume = lastEncoderValue / 2;
+        if (currentVolume != lastVolume) {
+            lastVolume = currentVolume;
+            volumeToQueueSender(currentVolume);
         }
     }
+}
 #endif
 
 // Receives de-serialized RFID-data (from NVS) and dispatches playlists for the given
@@ -3463,10 +3477,11 @@ bool processJsonRequest(char *_serialJson) {
 
     } else if (doc.containsKey("rfidAssign")) {
         const char *_rfidIdAssinId = object["rfidAssign"]["rfidIdMusic"];
-        const char *_fileOrUrl = object["rfidAssign"]["fileOrUrl"];
+        char _fileOrUrlAscii[MAX_FILEPATH_LENTGH];
+        convertUtf8ToAscii(object["rfidAssign"]["fileOrUrl"], _fileOrUrlAscii);
         uint8_t _playMode = object["rfidAssign"]["playMode"];
         char rfidString[275];
-        snprintf(rfidString, sizeof(rfidString) / sizeof(rfidString[0]), "%s%s%s0%s%u%s0", stringDelimiter, _fileOrUrl, stringDelimiter, stringDelimiter, _playMode, stringDelimiter);
+        snprintf(rfidString, sizeof(rfidString) / sizeof(rfidString[0]), "%s%s%s0%s%u%s0", stringDelimiter, _fileOrUrlAscii, stringDelimiter, stringDelimiter, _playMode, stringDelimiter);
         prefsRfid.putString(_rfidIdAssinId, rfidString);
         Serial.println(_rfidIdAssinId);
         Serial.println(rfidString);
@@ -3625,7 +3640,6 @@ bool isNumber(const char *str) {
   }
 
 }
-
 
 void webserverStart(void) {
     if (wifiManager() == WL_CONNECTED && !webserverStarted) {
@@ -3828,25 +3842,62 @@ void webserverStart(void) {
         return true;
     }
 
-// Conversion routine for http UTF-8 strings
-void convertUtf8ToAscii(String utf8String, char *asciiString) {
-    uint16_t i = 0, j=0;
-    bool f_C3_seen = false;
+// Conversion routine 
+void convertAsciiToUtf8(String asciiString, char *utf8String) {
 
-    while(utf8String[i] != 0) {                                     // convert UTF8 to ASCII
-        if(utf8String[i] == 195){                                   // C3
-            i++;
-            f_C3_seen = true;
-            continue;
+    int k=0;
+    
+    for (int i=0; i<asciiString.length() && k<MAX_FILEPATH_LENTGH-2; i++)
+    {
+        
+        switch (asciiString[i]) {
+            case 0x8e: utf8String[k++]=0xc3; utf8String[k++]=0x84;  break; // Ä
+            case 0x84: utf8String[k++]=0xc3; utf8String[k++]=0xa4;  break; // ä
+            case 0x9a: utf8String[k++]=0xc3; utf8String[k++]=0x9c;  break; // Ü
+            case 0x81: utf8String[k++]=0xc3; utf8String[k++]=0xbc;  break; // ü
+            case 0x99: utf8String[k++]=0xc3; utf8String[k++]=0x96;  break; // Ö
+            case 0x94: utf8String[k++]=0xc3; utf8String[k++]=0xb6;  break; // ö
+            case 0xe1: utf8String[k++]=0xc3; utf8String[k++]=0x9f;  break; // ß
+            default: utf8String[k++]=asciiString[i];   
         }
-        asciiString[j] = utf8String[i];
-        if(asciiString[j] > 128 && asciiString[j] < 189 && f_C3_seen == true) {
-            asciiString[j] = asciiString[j] + 64;                      // found a related ASCII sign
-            f_C3_seen = false;
-        }
-        i++; j++;
     }
-    asciiString[j] = 0;
+
+    utf8String[k]=0;
+
+}
+
+void convertUtf8ToAscii(String utf8String, char *asciiString) {
+
+  int k=0;
+  bool f_C3_seen = false;
+  
+  for (int i=0; i<utf8String.length() && k<MAX_FILEPATH_LENTGH-1; i++)
+  {
+
+    if(utf8String[i] == 195){                                   // C3
+      f_C3_seen = true;
+      continue;
+    } else {
+      if (f_C3_seen == true) {
+        f_C3_seen = false;
+        switch (utf8String[i]) {
+          case 0x84: asciiString[k++]=0x8e;  break; // Ä
+          case 0xa4: asciiString[k++]=0x84;  break; // ä
+          case 0x9c: asciiString[k++]=0x9a;  break; // Ü
+          case 0xbc: asciiString[k++]=0x81;  break; // ü
+          case 0x96: asciiString[k++]=0x99;  break; // Ö
+          case 0xb6: asciiString[k++]=0x94;  break; // ö
+          case 0x9f: asciiString[k++]=0xe1;  break; // ß
+          default: asciiString[k++]=0xdb;  // Unknow... 
+        }
+      } else {
+        asciiString[k++]=utf8String[i];
+      }
+
+    }
+  }
+
+  asciiString[k]=0;
 
 }
 
@@ -3859,7 +3910,7 @@ void explorerHandleFileUpload(AsyncWebServerRequest *request, String filename, s
     // New File
     if (!index) {
         String utf8FilePath;
-        static char asciiFilePath[256];
+        static char filePath[MAX_FILEPATH_LENTGH];
         if (request->hasParam("path")) {
             AsyncWebParameter *param = request->getParam("path");
             utf8FilePath = param->value() + "/" + filename;
@@ -3867,7 +3918,11 @@ void explorerHandleFileUpload(AsyncWebServerRequest *request, String filename, s
         } else {
             utf8FilePath = "/" + filename;
         }
-        convertUtf8ToAscii(utf8FilePath, asciiFilePath);
+
+        convertUtf8ToAscii(utf8FilePath, filePath);
+
+        snprintf(logBuf, serialLoglength, "%s: %s", (char *) FPSTR(writingFile), utf8FilePath.c_str());
+        loggerNl(serialDebug, logBuf, LOGLEVEL_INFO);
 
         // Create Ringbuffer for upload
         if(explorerFileUploadRingBuffer == NULL) {
@@ -3884,7 +3939,7 @@ void explorerHandleFileUpload(AsyncWebServerRequest *request, String filename, s
             explorerHandleFileStorageTask, /* Function to implement the task */
             "fileStorageTask", /* Name of the task */
             4000,  /* Stack size in words */
-            asciiFilePath,  /* Task input parameter */
+            filePath,  /* Task input parameter */
             2 | portPRIVILEGE_BIT,  /* Priority of the task */
             &fileStorageTaskHandle  /* Task handle. */
         );
@@ -3920,9 +3975,6 @@ void explorerHandleFileStorageTask(void *parameter) {
 
     uploadFile = FSystem.open((char *)parameter, "w");
 
-    snprintf(logBuf, serialLoglength, "%s: %s", (char *) FPSTR(writingFile), (char *) parameter);
-    loggerNl(serialDebug, logBuf, LOGLEVEL_INFO);
-
     for(;;) {
         esp_task_wdt_reset();
 
@@ -3953,13 +4005,13 @@ void explorerHandleListRequest(AsyncWebServerRequest *request) {
     //StaticJsonDocument<4096> jsonBuffer;
     String serializedJsonString;
     AsyncWebParameter *param;
-    char asciiFilePath[256];
+    char filePath[MAX_FILEPATH_LENTGH];
     JsonArray obj = jsonBuffer.createNestedArray();
     File root;
     if(request->hasParam("path")){
         param = request->getParam("path");
-        convertUtf8ToAscii(param->value(), asciiFilePath);
-        root = FSystem.open(asciiFilePath);
+        convertUtf8ToAscii(param->value(), filePath);
+        root = FSystem.open(filePath);
     } else {
         root = FSystem.open("/");
     }
@@ -3980,7 +4032,8 @@ void explorerHandleListRequest(AsyncWebServerRequest *request) {
 
     while(file) {
         JsonObject entry = obj.createNestedObject();
-        std::string path = file.name();
+        convertAsciiToUtf8(file.name(), filePath);
+        std::string path = filePath;
         std::string fileName = path.substr(path.find_last_of("/") + 1);
 
         entry["name"] = fileName;
@@ -3993,7 +4046,7 @@ void explorerHandleListRequest(AsyncWebServerRequest *request) {
     }
 
     serializeJson(obj, serializedJsonString);
-    request->send(200, "application/json; charset=iso-8859-1", serializedJsonString);
+    request->send(200, "application/json; charset=utf-8", serializedJsonString);
 }
 
 bool explorerDeleteDirectory(File dir) {
@@ -4021,31 +4074,31 @@ bool explorerDeleteDirectory(File dir) {
 void explorerHandleDeleteRequest(AsyncWebServerRequest *request) {
     File file;
     AsyncWebParameter *param;
-    char asciiFilePath[256];
+    char filePath[MAX_FILEPATH_LENTGH];
     if(request->hasParam("path")){
         param = request->getParam("path");
-        convertUtf8ToAscii(param->value(), asciiFilePath);
-        if(FSystem.exists(asciiFilePath)) {
-            file = FSystem.open(asciiFilePath);
+        convertUtf8ToAscii(param->value(), filePath);
+        if(FSystem.exists(filePath)) {
+            file = FSystem.open(filePath);
             if(file.isDirectory()) {
                 if(explorerDeleteDirectory(file)) {
-                    snprintf(logBuf, serialLoglength, "DELETE:  %s deleted", asciiFilePath);
+                    snprintf(logBuf, serialLoglength, "DELETE:  %s deleted", param->value().c_str());
                     loggerNl(serialDebug, logBuf, LOGLEVEL_INFO);
                 } else {
-                    snprintf(logBuf, serialLoglength, "DELETE:  Cannot delete %s", asciiFilePath);
+                    snprintf(logBuf, serialLoglength, "DELETE:  Cannot delete %s", param->value().c_str());
                     loggerNl(serialDebug, logBuf, LOGLEVEL_ERROR);
                 }
             } else {
-                if(FSystem.remove(asciiFilePath)) {
-                    snprintf(logBuf, serialLoglength, "DELETE:  %s deleted", asciiFilePath);
+                if(FSystem.remove(filePath)) {
+                    snprintf(logBuf, serialLoglength, "DELETE:  %s deleted", param->value().c_str());
                     loggerNl(serialDebug, logBuf, LOGLEVEL_INFO);
                 } else {
-                    snprintf(logBuf, serialLoglength, "DELETE:  Cannot delete %s", asciiFilePath);
+                    snprintf(logBuf, serialLoglength, "DELETE:  Cannot delete %s", param->value().c_str());
                     loggerNl(serialDebug, logBuf, LOGLEVEL_ERROR);
                 }
             }
         } else {
-            snprintf(logBuf, serialLoglength, "DELETE: Path %s does not exist", asciiFilePath);
+            snprintf(logBuf, serialLoglength, "DELETE: Path %s does not exist", param->value().c_str());
             loggerNl(serialDebug, logBuf, LOGLEVEL_ERROR);
         }
     } else {
@@ -4059,15 +4112,15 @@ void explorerHandleDeleteRequest(AsyncWebServerRequest *request) {
 // requires a GET parameter path to the new directory
 void explorerHandleCreateRequest(AsyncWebServerRequest *request) {
     AsyncWebParameter *param;
-    char asciiFilePath[256];
+    char filePath[MAX_FILEPATH_LENTGH];
     if(request->hasParam("path")){
         param = request->getParam("path");
-        convertUtf8ToAscii(param->value(), asciiFilePath);
-        if(FSystem.mkdir(asciiFilePath)) {
-            snprintf(logBuf, serialLoglength, "CREATE:  %s created", asciiFilePath);
+        convertUtf8ToAscii(param->value(), filePath);
+        if(FSystem.mkdir(filePath)) {
+            snprintf(logBuf, serialLoglength, "CREATE:  %s created", param->value().c_str());
             loggerNl(serialDebug, logBuf, LOGLEVEL_INFO);
         } else {
-            snprintf(logBuf, serialLoglength, "CREATE:  Cannot create %s", asciiFilePath);
+            snprintf(logBuf, serialLoglength, "CREATE:  Cannot create %s", param->value().c_str());
             loggerNl(serialDebug, logBuf, LOGLEVEL_ERROR);
         }
     } else {
@@ -4082,8 +4135,8 @@ void explorerHandleCreateRequest(AsyncWebServerRequest *request) {
 void explorerHandleRenameRequest(AsyncWebServerRequest *request) {
     AsyncWebParameter *srcPath;
     AsyncWebParameter *dstPath;
-    char srcFullFilePath[256];
-    char dstFullFilePath[256];
+    char srcFullFilePath[MAX_FILEPATH_LENTGH];
+    char dstFullFilePath[MAX_FILEPATH_LENTGH];
     if(request->hasParam("srcpath") && request->hasParam("dstpath")) {
         srcPath = request->getParam("srcpath");
         dstPath = request->getParam("dstpath");
@@ -4091,14 +4144,14 @@ void explorerHandleRenameRequest(AsyncWebServerRequest *request) {
         convertUtf8ToAscii(dstPath->value(), dstFullFilePath);
         if(FSystem.exists(srcFullFilePath)) {
             if(FSystem.rename(srcFullFilePath, dstFullFilePath)) {
-                    snprintf(logBuf, serialLoglength, "RENAME:  %s renamed to %s", srcFullFilePath, dstFullFilePath);
+                    snprintf(logBuf, serialLoglength, "RENAME:  %s renamed to %s", srcPath->value().c_str(), dstPath->value().c_str());
                     loggerNl(serialDebug, logBuf, LOGLEVEL_INFO);
             } else {
-                    snprintf(logBuf, serialLoglength, "RENAME:  Cannot rename %s", srcFullFilePath);
+                    snprintf(logBuf, serialLoglength, "RENAME:  Cannot rename %s", srcPath->value().c_str());
                     loggerNl(serialDebug, logBuf, LOGLEVEL_ERROR);
             }
         } else {
-            snprintf(logBuf, serialLoglength, "RENAME: Path %s does not exist", srcFullFilePath);
+            snprintf(logBuf, serialLoglength, "RENAME: Path %s does not exist", srcPath->value().c_str());
             loggerNl(serialDebug, logBuf, LOGLEVEL_ERROR);
         }
     } else {
@@ -4115,29 +4168,20 @@ void explorerHandleAudioRequest(AsyncWebServerRequest *request) {
     AsyncWebParameter *param;
     String playModeString;
     uint32_t playMode;
-    char asciiFilePath[256];
+    char filePath[MAX_FILEPATH_LENTGH];
     if(request->hasParam("path") && request->hasParam("playmode")) {
         param = request->getParam("path");
-        convertUtf8ToAscii(param->value(), asciiFilePath);
+        convertUtf8ToAscii(param->value(), filePath);
         param = request->getParam("playmode");
         playModeString = param->value();
 
         playMode = atoi(playModeString.c_str());
-        trackQueueDispatcher(asciiFilePath,0,playMode,0);
+        trackQueueDispatcher(filePath,0,playMode,0);
     } else {
         loggerNl(serialDebug, "AUDIO: No path variable set", LOGLEVEL_ERROR);
     }
 
     request->send(200);
-}
-
-void playAudioMenu(String filename) {
-    String playModeString;
-    uint32_t playMode;
-    char asciiFilePath[256];
-    convertUtf8ToAscii(filename, asciiFilePath);
-    playMode = 1;
-    trackQueueDispatcher(asciiFilePath,0,playMode,0);
 }
 
 
@@ -4364,7 +4408,7 @@ void setup() {
    Serial.println(F(" | ____| / ___|  |  _ \\   _   _  (_)  _ __     ___  "));
    Serial.println(F(" |  _|   \\__  \\  | |_) | | | | | | | | '_ \\   / _ \\"));
    Serial.println(F(" | |___   ___) | |  __/  | |_| | | | | | | | | (_) |"));
-   Serial.println(F(" |_____| |____/  |_|     \\__,_| |_| |_| |_|  \\___/ "));
+   Serial.println(F(" |_____| |____/  |_|      \\__,_| |_| |_| |_|  \\___/ "));
    Serial.println(F(" Rfid-controlled musicplayer\n"));
    // print wake-up reason
    printWakeUpReason();
@@ -4402,6 +4446,12 @@ void setup() {
         headphoneLastDetectionState = digitalRead(HP_DETECT);
     #endif
 
+    //Print the wakeup reason for ESP32
+    print_wakeup_reason();
+    
+    //Print the GPIO used to wake up
+    print_GPIO_wake_up();
+
     
     // Get some stuff from NVS...
     // Get initial LED-brightness from NVS
@@ -4415,6 +4465,8 @@ void setup() {
         //loggerNl((char *) FPSTR(wroteInitialModeToNvs), LOGLEVEL_ERROR);
     }
 
+    // Get some stuff from NVS...
+    // Get initial LED-brightness from NVS
     uint8_t nvsILedBrightness = prefsSettings.getUChar("iLedBrightness", 0);
     if (nvsILedBrightness) {
             initialLedBrightness = nvsILedBrightness;
@@ -4690,6 +4742,9 @@ void setup() {
         pinMode(PAUSEPLAY_BUTTON, INPUT);
         pinMode(NEXT_BUTTON, INPUT);
         pinMode(PREVIOUS_BUTTON, INPUT);
+        digitalWrite(PAUSEPLAY_BUTTON,LOW);
+        digitalWrite(NEXT_BUTTON,LOW);
+        digitalWrite(PREVIOUS_BUTTON,LOW);
     #endif
     #ifndef HWPULLUP 
         // Activate internal pullups for all buttons
@@ -4717,7 +4772,7 @@ void setup() {
     #endif
 
     // set wakupmask for powersave over RTC GPIOs as ext1 wakupsource 
-    esp_sleep_enable_ext1_wakeup(WAKUPMASK, ESP_EXT1_WAKEUP_ALL_LOW);
+    esp_sleep_enable_ext1_wakeup(WAKUPMASK2, ESP_EXT1_WAKEUP_ALL_LOW);
     
     if (operating_mode != BT_MODE) {
       wifiEnabled = getWifiEnableStatusFromNVS();
@@ -4729,10 +4784,12 @@ void setup() {
     bootComplete = true;
 
     if (operating_mode != BT_MODE) {
-        Serial.printf("\n****Before BLEDevice::deinit ESP.getFreeHeap() %u\n",ESP.getFreeHeap());
+        Serial.print(F("\n****Before BLEDevice::deinit ESP.getFreeHeap() "));
+        Serial.printf("%u\n",ESP.getFreeHeap());
         esp_bt_controller_deinit();
         esp_bt_mem_release(ESP_BT_MODE_BTDM);
-        Serial.printf("\n****After BLEDevice::deinit ESP.getFreeHeap() %u\n",ESP.getFreeHeap());
+        Serial.print(F("\n****After BLEDevice::deinit ESP.getFreeHeap() "));
+        Serial.printf("%u\n",ESP.getFreeHeap());
     }
 
     if (operating_mode == WEBRADIO_MODE) {
@@ -4847,4 +4904,29 @@ void audio_icyurl(const char *info) {  //homepage
 void audio_lasthost(const char *info) {  //stream URL played
     snprintf(logBuf, serialLoglength, "lasthost    : %s", info);
     loggerNl(serialDebug, logBuf, LOGLEVEL_INFO);
+}
+
+void print_GPIO_wake_up(){
+    unsigned int GPIO_reason = esp_sleep_get_ext1_wakeup_status();
+    unsigned int GPIO_reason_log = (log(GPIO_reason))/log(2);
+    Serial.print(F("GPIO_REASON: "));
+    Serial.println(GPIO_reason);
+    Serial.print(F("GPIO_REASON_LOG: "));
+    Serial.println(GPIO_reason_log);
+}
+
+void print_wakeup_reason(){
+  esp_sleep_wakeup_cause_t wakeup_reason;
+ 
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+ 
+  switch(wakeup_reason)
+  {
+    case ESP_SLEEP_WAKEUP_EXT0 : Serial.println(F("Wakeup caused by external signal using RTC_IO")); break;
+    case ESP_SLEEP_WAKEUP_EXT1 : Serial.println(F("Wakeup caused by external signal using RTC_CNTL")); break;
+    case ESP_SLEEP_WAKEUP_TIMER : Serial.println(F("Wakeup caused by timer")); break;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println(F("Wakeup caused by touchpad")); break;
+    case ESP_SLEEP_WAKEUP_ULP : Serial.println(F("Wakeup caused by ULP program")); break;
+    default : Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); break;
+  }
 }
