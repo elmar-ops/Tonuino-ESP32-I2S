@@ -35,7 +35,7 @@
 #endif
 
 // RFID (via SPI)
-#define RST_PIN                         22          // Used for hard power-down (RST connected to GND)
+#define RST_PIN                         22          // Used for hard power-down (RST connected to GND) LED GREEN
 #define RFID_CS                         21          // GPIO for chip select (RFID)
 #define RFID_MOSI                       23          // GPIO for master out slave in (RFID)
 #define RFID_MISO                       19          // GPIO for master in slave out (RFID)
@@ -63,9 +63,6 @@
 #define PAUSEPLAY_BUTTON                34           // 34 needs external pullup!            
 #define NEXT_BUTTON                     36           // 36 needs external pullup!       
 #define PREVIOUS_BUTTON                 39           // 39 needs external pullup!       
-#define WAKUPMASK1                      0x1000000000 //34     
-#define WAKUPMASK2                      0x400000000  //36
-#define WAKUPMASK3                      0x8000000000 //39
 
 // (optional) Power-control
 #define POWER                           99          // GPIO used to drive transistor-circuit, that switches off peripheral devices while ESP32-deepsleep

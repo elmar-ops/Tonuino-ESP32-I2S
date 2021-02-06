@@ -1670,7 +1670,7 @@ void playAudio(void *parameter) {
                         continue;
                     }
                     #ifdef NEOPIXEL_ENABLE
-                        showPlaylistProgress = true;
+                        //showPlaylistProgress = true;
                     #endif
                     if (playProperties.startAtFilePos > 0) {
                         audio.setFilePos(playProperties.startAtFilePos);
@@ -2406,6 +2406,10 @@ void deepSleepManager(void) {
         if (sleeping)
             return;
         sleeping = true;
+        #ifndef RFID_READER_TYPE_PN5180
+          digitalWrite(RST_PIN, LOW);  // RFID
+          mfrc522->PCD_SoftPowerDown();
+        #endif
         loggerNl(serialDebug, (char *) FPSTR(goToSleepNow), LOGLEVEL_NOTICE);
         #ifdef MQTT_ENABLE
             publishMqtt((char *) FPSTR(topicState), "Offline", false);
@@ -2434,19 +2438,12 @@ void deepSleepManager(void) {
         #endif
         esp_wifi_stop();
 
-        #ifdef RFID_READER_TYPE_MFRC522
-          mfrc522->PCD_SoftPowerDown();
-        #endif
-
-        //max98357a shout soft standby as no BLCK signal will be send
+        //max98357a should soft standby as no BLCK signal will be send
 
         /*SPI.end();
         spiSD.end();*/
         Serial.flush();
         digitalWrite(POWER, LOW);
-        #ifndef RFID_READER_TYPE_PN5180
-          digitalWrite(RST_PIN, LOW);  // RFID
-        #endif
         //esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
         // only pin 32 - 39 are available in ext1!
         #ifdef PN5180_ENABLE_LPCD
@@ -4772,7 +4769,7 @@ void setup() {
     #endif
 
     // set wakupmask for powersave over RTC GPIOs as ext1 wakupsource 
-    esp_sleep_enable_ext1_wakeup(WAKUPMASK2, ESP_EXT1_WAKEUP_ALL_LOW);
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)PAUSEPLAY_BUTTON, 0);
     
     if (operating_mode != BT_MODE) {
       wifiEnabled = getWifiEnableStatusFromNVS();
