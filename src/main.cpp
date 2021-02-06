@@ -4686,6 +4686,11 @@ void setup() {
         );
     }
 
+    #ifdef HWPULLUP 
+        pinMode(PAUSEPLAY_BUTTON, INPUT);
+        pinMode(NEXT_BUTTON, INPUT);
+        pinMode(PREVIOUS_BUTTON, INPUT);
+    #endif
     #ifndef HWPULLUP 
         // Activate internal pullups for all buttons
         pinMode(PAUSEPLAY_BUTTON, INPUT_PULLUP);
