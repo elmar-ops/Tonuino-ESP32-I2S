@@ -35,14 +35,14 @@
 #endif
 
 // RFID (via SPI)
-#define RST_PIN                         17          // Not necessary but has to be set anyway; so let's use a dummy-number
+#define RST_PIN                         22          // Used for hard power-down (RST connected to GND)
 #define RFID_CS                         21          // GPIO for chip select (RFID)
 #define RFID_MOSI                       23          // GPIO for master out slave in (RFID)
 #define RFID_MISO                       19          // GPIO for master in slave out (RFID)
 #define RFID_SCK                        18          // GPIO for clock-signal (RFID)
 
 #ifdef RFID_READER_TYPE_PN5180
-    #define RFID_BUSY                   16          // PN5180 BUSY PIN
+    #define RFID_BUSY                   99          // PN5180 BUSY PIN
     #define RFID_RST                    22          // PN5180 RESET PIN
 #endif
 
@@ -51,16 +51,19 @@
 #define I2S_BCLK                        27          // BCLK (I2S)
 #define I2S_LRC                         26          // LRC (I2S)
 
-// Rotary encoder
-#define DREHENCODER_CLK                 99          // If you want to reverse encoder's direction, just switch GPIOs of CLK with DT (in software or hardware)
-#define DREHENCODER_DT                  99          // Info: Lolin D32 / Lolin D32 pro 35 are using 35 for battery-voltage-monitoring!
-#define DREHENCODER_BUTTON              99          // Button is used to switch Tonuino on and off
+#ifdef USE_ENCODER
+    // Rotary encoder
+    #define DREHENCODER_CLK                 99          // If you want to reverse encoder's direction, just switch GPIOs of CLK with DT (in software or hardware)
+    #define DREHENCODER_DT                  99          // Info: Lolin D32 / Lolin D32 pro 35 are using 35 for battery-voltage-monitoring!
+    #define DREHENCODER_BUTTON              99          // Button is used to switch Tonuino on and off
+#endif
 
 // GPIOs (Control-buttons)
-#define PAUSEPLAY_BUTTON                31
-#define NEXT_BUTTON                     32
-#define PREVIOUS_BUTTON                 33           // Please note: as of 19.11.2020 changed from 33 to 2
-#define WAKUPMASK                       0x300000000  // 32-33     
+
+#define PAUSEPLAY_BUTTON                34           // 34 needs external pullup!            
+#define NEXT_BUTTON                     36           // 36 needs external pullup!       
+#define PREVIOUS_BUTTON                 39           // 39 needs external pullup!       
+#define WAKUPMASK                       0x9400000000  // 34,36,39     
 
 // (optional) Power-control
 #define POWER                           99          // GPIO used to drive transistor-circuit, that switches off peripheral devices while ESP32-deepsleep

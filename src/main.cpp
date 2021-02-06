@@ -571,8 +571,8 @@ void doButtonActions(void) {
         return; // Avoid button-handling if buttons are locked
     }
 
-    // WiFi-toggle
-    if (buttons[0].isPressed && buttons[1].isPressed) {
+    // MODE-toggle all three!
+    if (buttons[0].isPressed && buttons[1].isPressed && buttons[2].isPressed) {
         if (!wifiStatusToggledTimestamp || (millis() - wifiStatusToggledTimestamp >= 2000)) {
             wifiStatusToggledTimestamp = millis();
             buttons[0].isPressed = false;
@@ -652,22 +652,31 @@ void doButtonActions(void) {
                     switch (i)      // Short-press-actions
                     {
                     case 0:
-                        if (currentVolume < maxVolume) {
-                          currentVolume++;
-                          volumeToQueueSender(currentVolume);
-                        }
-                        //trackControlToQueueSender(NEXTTRACK);
-                        buttons[i].isPressed = false;
-                        break;
+                        #ifdef USE_ENCODER
+                          trackControlToQueueSender(NEXTTRACK);
+                        #endif
+                        #ifndef USE_ENCODER
+                            if (currentVolume < maxVolume) {
+                            currentVolume++;
+                            volumeToQueueSender(currentVolume);
+                            }
+                            buttons[i].isPressed = false;
+                            break;
+                        #endif
 
                     case 1:
-                        if (currentVolume > 0) {
-                          currentVolume--;
-                          volumeToQueueSender(currentVolume);
-                          //trackControlToQueueSender(PREVIOUSTRACK);
-                        }
-                        buttons[i].isPressed = false;
-                        break;
+                        #ifdef USE_ENCODER
+                          trackControlToQueueSender(PREVIOUSTRACK);
+                        #endif
+                        #ifndef USE_ENCODER
+                            if (currentVolume > 0) {
+                            currentVolume--;
+                            volumeToQueueSender(currentVolume);
+                            
+                            }
+                            buttons[i].isPressed = false;
+                            break;
+                        #endif
 
                     case 2:
                         trackControlToQueueSender(PAUSEPLAY);
@@ -1755,7 +1764,7 @@ void rfidScanner(void *parameter) {
                 Serial.println("...continue");
               }
             } else {
-              Serial.print("New Card ...");
+              Serial.println("New Card ...");
               prevCardIdString = (char *) malloc(cardIdSize*3 +1);
               strcpy ( prevCardIdString, cardIdString );
               xQueueSend(rfidCardQueue, &cardIdString, 0);
@@ -2421,15 +2430,11 @@ void deepSleepManager(void) {
         /*SPI.end();
         spiSD.end();*/
         digitalWrite(POWER, LOW);
-        digitalWrite(RST_PIN, LOW);
-        esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
-        // only pin 32 - 39 are available in ext1!
-        // pin 34-39 have no pullup!
-        rtc_gpio_pullup_en(GPIO_NUM_32);
-        rtc_gpio_pulldown_dis(GPIO_NUM_32);
-        rtc_gpio_pullup_en(GPIO_NUM_33);
-        rtc_gpio_pulldown_dis(GPIO_NUM_33);
-        delay(200);
+        #ifndef RFID_READER_TYPE_PN5180
+          digitalWrite(RST_PIN, LOW);  // RFID
+        #endif
+        //esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+        
         #ifdef PN5180_ENABLE_LPCD
             // prepare and go to low power card detection mode
             gotoLPCD();
@@ -4359,10 +4364,14 @@ void setup() {
    Serial.println(F(" | ____| / ___|  |  _ \\   _   _  (_)  _ __     ___  "));
    Serial.println(F(" |  _|   \\__  \\  | |_) | | | | | | | | '_ \\   / _ \\"));
    Serial.println(F(" | |___   ___) | |  __/  | |_| | | | | | | | | (_) |"));
-   Serial.println(F(" |_____| |____/  |_|      \\__,_| |_| |_| |_|  \\___/ "));
+   Serial.println(F(" |_____| |____/  |_|     \\__,_| |_| |_| |_|  \\___/ "));
    Serial.println(F(" Rfid-controlled musicplayer\n"));
    // print wake-up reason
    printWakeUpReason();
+   //reset GPIOs after sleep as they now RTC IOs
+   rtc_gpio_deinit(gpio_num_t(PAUSEPLAY_BUTTON));
+   rtc_gpio_deinit(gpio_num_t(NEXT_BUTTON));
+   rtc_gpio_deinit(gpio_num_t(PREVIOUS_BUTTON));
    #ifdef PN5180_ENABLE_LPCD
      // disable pin hold from deep sleep
      gpio_deep_sleep_hold_dis();
@@ -4677,18 +4686,21 @@ void setup() {
         );
     }
 
-
-    // Activate internal pullups for all buttons
-    pinMode(DREHENCODER_BUTTON, INPUT_PULLUP);
-    pinMode(PAUSEPLAY_BUTTON, INPUT_PULLUP);
-    pinMode(NEXT_BUTTON, INPUT_PULLUP);
-    pinMode(PREVIOUS_BUTTON, INPUT_PULLUP);
+    #ifndef HWPULLUP 
+        // Activate internal pullups for all buttons
+        pinMode(PAUSEPLAY_BUTTON, INPUT_PULLUP);
+        pinMode(NEXT_BUTTON, INPUT_PULLUP);
+        pinMode(PREVIOUS_BUTTON, INPUT_PULLUP);
+    #endif
 
     #ifdef USE_ENCODER
         // Init rotary encoder
         encoder.attachHalfQuad(DREHENCODER_CLK, DREHENCODER_DT);
         encoder.clearCount();
         encoder.setCount(initVolume*2);         // Ganzes Raster ist immer +2, daher initiale Lautstärke mit 2 multiplizieren
+        #ifndef HWPULLUP 
+          pinMode(DREHENCODER_BUTTON, INPUT_PULLUP);
+        #endif
     #endif
 
     // Only enable MQTT if requested
@@ -4699,6 +4711,7 @@ void setup() {
         }
     #endif
 
+    // set wakupmask for powersave over RTC GPIOs as ext1 wakupsource 
     esp_sleep_enable_ext1_wakeup(WAKUPMASK, ESP_EXT1_WAKEUP_ALL_LOW);
     
     if (operating_mode != BT_MODE) {
