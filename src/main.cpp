@@ -1412,6 +1412,7 @@ void playAudio(void *parameter) {
 
             if (playProperties.playlistFinished && trackCommand != 0) {
                 loggerNl(serialDebug, (char *) FPSTR(noPlaymodeChangeIfIdle), LOGLEVEL_NOTICE);
+                *prevCardIdString = NULL; // reset prev card
                 trackCommand = 0;
                 #ifdef NEOPIXEL_ENABLE
                     showLedError = true;
