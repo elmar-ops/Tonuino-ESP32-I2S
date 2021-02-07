@@ -1770,14 +1770,14 @@ void rfidScanner(void *parameter) {
             }
             xQueueSend(rfidCardQueue, &cardIdString, 0);
             if (strcmp(cardIdString, prevCardIdString) == 0) {
-              Serial.println("Same Card ...");
+              Serial.println(F("Same Card ..."));
               if (playProperties.pausePlay)
               {
                 trackControlToQueueSender(PAUSEPLAY);
-                Serial.println("...continue");
+                Serial.println(F("...continue"));
               }
             } else {
-              Serial.println("New Card ...");
+              Serial.println(F("New Card ..."));
               prevCardIdString = (char *) malloc(cardIdSize*3 +1);
               strcpy ( prevCardIdString, cardIdString );
               xQueueSend(rfidCardQueue, &cardIdString, 0);
@@ -2410,7 +2410,6 @@ void deepSleepManager(void) {
         #ifndef RFID_READER_TYPE_PN5180
           digitalWrite(RST_PIN, LOW);  // RFID
           digitalWrite(LED_PIN, LOW);  // LED
-          mfrc522->PCD_SoftPowerDown();
         #endif
         
         loggerNl(serialDebug, (char *) FPSTR(goToSleepNow), LOGLEVEL_NOTICE);
@@ -2453,7 +2452,6 @@ void deepSleepManager(void) {
             // prepare and go to low power card detection mode
             gotoLPCD();
         #endif
-        rtc_gpio_isolate((gpio_num_t)  GPIO_NUM_12);
         Serial.println(F("deep-sleep, good night......."));
         esp_deep_sleep_start();
     }
@@ -3121,7 +3119,19 @@ void rfidPreferenceLookupHandler (void) {
                 #ifdef MQTT_ENABLE
                     publishMqtt((char *) FPSTR(topicRfidState), currentRfidTagId, false);
                 #endif
-                trackQueueDispatcher(_file, _lastPlayPos, _playMode, _trackLastPlayed);
+                if (strcmp(currentRfidTagId, prevCardIdString) == 0) {
+                    Serial.println(F("Same Card ..."));
+                    if (playProperties.pausePlay)
+                    {
+                        trackControlToQueueSender(PAUSEPLAY);
+                        Serial.println(F("...continue"));
+                    }
+                } else {
+                    Serial.println(F("New Card ..."));
+                    prevCardIdString = (char *) malloc(cardIdSize*3 +1);
+                    strcpy ( prevCardIdString, currentRfidTagId );
+                    trackQueueDispatcher(_file, _lastPlayPos, _playMode, _trackLastPlayed);
+                }
             }
         }
     }
@@ -4397,7 +4407,7 @@ void setup() {
             //pinMode(RFID_CS, OUTPUT);
             //digitalWrite(RFID_CS, HIGH);
             mfrc522 = new MFRC522(RFID_CS, RST_PIN);
-            mfrc522->PCD_Init();
+            mfrc522->PCD_Init(RFID_CS, RST_PIN);
             delay(50);
             loggerNl(serialDebug, (char *) FPSTR(rfidScannerReady), LOGLEVEL_DEBUG);
         }
@@ -4411,12 +4421,12 @@ void setup() {
    Serial.println(F(" | |___   ___) | |  __/  | |_| | | | | | | | | (_) |"));
    Serial.println(F(" |_____| |____/  |_|      \\__,_| |_| |_| |_|  \\___/ "));
    Serial.println(F(" Rfid-controlled musicplayer\n"));
-   // print wake-up reason
-   printWakeUpReason();
+
    //reset GPIOs after sleep as they now RTC IOs
    rtc_gpio_deinit(gpio_num_t(PAUSEPLAY_BUTTON));
    rtc_gpio_deinit(gpio_num_t(NEXT_BUTTON));
    rtc_gpio_deinit(gpio_num_t(PREVIOUS_BUTTON));
+   
    #ifdef PN5180_ENABLE_LPCD
      // disable pin hold from deep sleep
      gpio_deep_sleep_hold_dis();
