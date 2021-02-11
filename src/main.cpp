@@ -30,6 +30,7 @@
     #include "ESP32FtpServer.h"
 #endif
 #ifdef BLUETOOTH_ENABLE
+    #include "esp_bt.h"
     #include "BluetoothA2DPSink.h"
 #endif
 #include "Audio.h"
@@ -78,14 +79,12 @@
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 #include <nvsDump.h>
+
 #include "freertos/ringbuf.h"
 #include <vector>
 #include <esp_wifi.h>
 #include "driver/rtc_io.h"
 
-// Info-docs:
-// https://docs.aws.amazon.com/de_de/freertos-kernel/latest/dg/queue-management.html
-// https://arduino-esp8266.readthedocs.io/en/latest/PROGMEM.html#how-do-i-declare-a-global-flash-string-and-use-it
 
 // Serial-logging buffer
 uint8_t serialLoglength = 200;
@@ -100,7 +99,7 @@ char *logBuf = (char*) calloc(serialLoglength, sizeof(char)); // Buffer for all 
 #endif
 
 #ifdef BLUETOOTH_ENABLE
-    BluetoothA2DPSink a2dp_sink;
+    BluetoothA2DPSink *a2dp_sink;
 #endif
 
 #ifdef MEASURE_BATTERY_VOLTAGE
@@ -114,6 +113,10 @@ char *logBuf = (char*) calloc(serialLoglength, sizeof(char)); // Buffer for all 
 #ifdef PLAY_LAST_RFID_AFTER_REBOOT
     bool recoverLastRfid = true;
 #endif
+
+// Operation Mode
+#define OPMODE_NORMAL                   0           // Normal mode
+#define OPMODE_BLUETOOTH                1           // Bluetooth mode. WiFi is deactivated. Music from SD and webstreams can't be played.
 
 // Track-Control
 #define STOP                            1           // Stop play
@@ -150,6 +153,7 @@ char *logBuf = (char*) calloc(serialLoglength, sizeof(char)); // Buffer for all 
 #define REPEAT_TRACK                    111         // Changes active playmode to endless-loop (for a single track)
 #define DIMM_LEDS_NIGHTMODE             120         // Changes LED-brightness
 #define TOGGLE_WIFI_STATUS              130         // Toggles WiFi-status
+#define TOGGLE_BLUETOOTH_MODE           140         // Toggles Normal/Bluetooth Mode
 
 // Repeat-Modes
 #define NO_REPEAT                       0           // No repeat
@@ -181,6 +185,9 @@ typedef struct {
     char nvsKey[13];
     char nvsEntry[275];
 } nvs_t;
+
+// Operation Mode
+volatile uint8_t operationMode;
 
 // Configuration of initial values (for the first start) goes here....
 // There's no need to change them here as they can be configured via webinterface
@@ -297,6 +304,7 @@ AsyncEventSource events("/events");
 #else
     fs::FS FSystem = (fs::FS)SD_MMC;
 #endif
+
 TaskHandle_t mp3Play;
 TaskHandle_t rfid;
 TaskHandle_t fileStorageTaskHandle;
@@ -317,6 +325,7 @@ TaskHandle_t fileStorageTaskHandle;
     static TwoWire i2cBusTwo = TwoWire(1);
     static MFRC522 mfrc522(MFRC522_ADDR, MFRC522_RST_PIN, i2cBusTwo);
 #endif
+
 // FTP
 #ifdef FTP_ENABLE
     FtpServer *ftpSrv;      // Heap-alloction takes place later (when needed)
@@ -434,9 +443,12 @@ void volumeHandler(const int32_t _minVolume, const int32_t _maxVolume);
 void volumeToQueueSender(const int32_t _newVolume);
 wl_status_t wifiManager(void);
 bool writeWifiStatusToNVS(bool wifiStatus);
+void bluetoothHandler(void);
+uint8_t readOperationModeFromNVS(void);
+bool setOperationMode(uint8_t operationMode);
+
 void playAudioMenu(String filename);
-void print_wakeup_reason(void);
-void print_GPIO_wake_up(void);
+
 
 /* Wrapper-function for serial-logging (with newline)
     _currentLogLevel: loglevel that's currently active
@@ -1972,7 +1984,7 @@ void showLed(void *parameter) {
     static unsigned long lastSwitchTimestamp = 0;
     static bool redrawProgress = false;
     static uint8_t lastLedBrightness = ledBrightness;
-
+    static CRGB::HTMLColorCode idleColor;
     static CRGB leds[NUM_LEDS];
     FastLED.addLeds<CHIPSET , LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection( TypicalSMD5050 );
     FastLED.setBrightness(ledBrightness);
@@ -2223,19 +2235,32 @@ void showLed(void *parameter) {
 
         switch (playProperties.playMode) {
             case NO_PLAYLIST:                   // If no playlist is active (idle)
+                #ifdef BLUETOOTH_ENABLE
+                if(operationMode == OPMODE_BLUETOOTH ) {
+                    idleColor = CRGB::Blue;
+                } else  {
+                #endif
+                    if(wifiManager() == WL_CONNECTED) {
+                        idleColor = CRGB::White;
+                    } else {
+                        idleColor = CRGB::Green;
+                    }
+                #ifdef BLUETOOTH_ENABLE
+                }
+                #endif
                 if (hlastVolume == currentVolume && lastLedBrightness == ledBrightness) {
                     for (uint8_t i=0; i<NUM_LEDS; i++) {
                         FastLED.clear();
                         if (ledAddress(i) == 0) {       // White if Wifi is enabled and blue if not
-                            leds[0] = (wifiManager() == WL_CONNECTED) ? CRGB::White : CRGB::Blue;
-                            leds[NUM_LEDS/4] = (wifiManager() == WL_CONNECTED) ? CRGB::White : CRGB::Blue;
-                            leds[NUM_LEDS/2] = (wifiManager() == WL_CONNECTED) ? CRGB::White : CRGB::Blue;
-                            leds[NUM_LEDS/4*3] = (wifiManager() == WL_CONNECTED) ? CRGB::White : CRGB::Blue;
+                            leds[0]            = idleColor;
+                            leds[NUM_LEDS/4]   = idleColor;
+                            leds[NUM_LEDS/2]   = idleColor;
+                            leds[NUM_LEDS/4*3] = idleColor;
                         } else {
-                            leds[ledAddress(i) % NUM_LEDS] = (wifiManager() == WL_CONNECTED) ? CRGB::White : CRGB::Blue;
-                            leds[(ledAddress(i)+NUM_LEDS/4) % NUM_LEDS] = (wifiManager() == WL_CONNECTED) ? CRGB::White : CRGB::Blue;
-                            leds[(ledAddress(i)+NUM_LEDS/2) % NUM_LEDS] = (wifiManager() == WL_CONNECTED) ? CRGB::White : CRGB::Blue;
-                            leds[(ledAddress(i)+NUM_LEDS/4*3) % NUM_LEDS] = (wifiManager() == WL_CONNECTED) ? CRGB::White : CRGB::Blue;
+                            leds[ledAddress(i) % NUM_LEDS]                = idleColor;
+                            leds[(ledAddress(i)+NUM_LEDS/4) % NUM_LEDS]   = idleColor;
+                            leds[(ledAddress(i)+NUM_LEDS/2) % NUM_LEDS]   = idleColor;
+                            leds[(ledAddress(i)+NUM_LEDS/4*3) % NUM_LEDS] = idleColor;
                         }
                         FastLED.show();
                         for (uint8_t i=0; i<=50; i++) {
@@ -2408,11 +2433,6 @@ void deepSleepManager(void) {
         if (sleeping)
             return;
         sleeping = true;
-        #ifndef RFID_READER_TYPE_PN5180
-          digitalWrite(RST_PIN, LOW);  // RFID
-          digitalWrite(LED_PIN, LOW);  // LED
-        #endif
-        
         loggerNl(serialDebug, (char *) FPSTR(goToSleepNow), LOGLEVEL_NOTICE);
         #ifdef MQTT_ENABLE
             publishMqtt((char *) FPSTR(topicState), "Offline", false);
@@ -2446,6 +2466,7 @@ void deepSleepManager(void) {
         /*SPI.end();
         spiSD.end();*/
         Serial.flush();
+        // switch off power
         digitalWrite(POWER, LOW);
         //esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
         // only pin 32 - 39 are available in ext1!
@@ -3051,7 +3072,25 @@ void doRfidCardModifications(const uint32_t mod) {
             }
 
             break;
-
+        #ifdef BLUETOOTH_ENABLE
+        case TOGGLE_BLUETOOTH_MODE:
+            if (readOperationModeFromNVS() == OPMODE_NORMAL) {
+                #ifdef NEOPIXEL_ENABLE
+                    showLedOk = true;
+                #endif
+                setOperationMode(OPMODE_BLUETOOTH);
+            } else if (readOperationModeFromNVS() == OPMODE_BLUETOOTH) {
+                #ifdef NEOPIXEL_ENABLE
+                    showLedOk = true;
+                #endif
+                setOperationMode(OPMODE_NORMAL);
+            } else {
+                 #ifdef NEOPIXEL_ENABLE
+                    showLedError = true;
+                #endif
+            }
+            break;
+        #endif
         default:
             snprintf(logBuf, serialLoglength, "%s %d !", (char *) FPSTR(modificatorDoesNotExist), mod);
             loggerNl(serialDebug, logBuf, LOGLEVEL_ERROR);
@@ -3183,7 +3222,6 @@ void accessPointStart(const char *SSID, IPAddress ip, IPAddress netmask) {
     accessPointStarted = true;
 }
 
-
 // Reads stored WiFi-status from NVS
 bool getWifiEnableStatusFromNVS(void) {
     uint32_t wifiStatus = prefsSettings.getUInt("enableWifi", 99);
@@ -3222,6 +3260,41 @@ bool writeWifiStatusToNVS(bool wifiStatus) {
     }
     return true;
 }
+
+uint8_t readOperationModeFromNVS(void) {
+    return prefsSettings.getUChar("operationMode", OPMODE_NORMAL);
+}
+
+bool setOperationMode(uint8_t newOperationMode) {
+    uint8_t currentOperationMode = prefsSettings.getUChar("operationMode", OPMODE_NORMAL);
+    if(currentOperationMode != newOperationMode) {
+        if (prefsSettings.putUChar("operationMode", newOperationMode)) {
+            ESP.restart();
+        }
+    }
+    return true;
+}
+
+
+// Creates FTP-instance only when requested
+#ifdef FTP_ENABLE
+    void ftpManager(void) {
+        if (ftpEnableLastStatus && !ftpEnableCurrentStatus) {
+            snprintf(logBuf, serialLoglength, "%s: %u", (char *) FPSTR(freeHeapWithoutFtp), ESP.getFreeHeap());
+            loggerNl(serialDebug, logBuf, LOGLEVEL_DEBUG);
+            ftpEnableCurrentStatus = true;
+            ftpSrv = new FtpServer();
+            ftpSrv->begin(FSystem, ftpUser, ftpPassword);
+            snprintf(logBuf, serialLoglength, "%s: %u", (char *) FPSTR(freeHeapWithFtp), ESP.getFreeHeap());
+            loggerNl(serialDebug, logBuf, LOGLEVEL_DEBUG);
+            #if (LANGUAGE == 1)
+                Serial.println(F("FTP-Server gestartet"));
+            #else
+                Serial.println(F("FTP-server started"));
+            #endif
+        }
+    }
+#endif
 
 
 // Creates FTP-instance only when requested
@@ -3325,6 +3398,8 @@ wl_status_t wifiManager(void) {
     return WiFi.status();
 }
 
+const char mqttTab[] PROGMEM = "<a class=\"nav-item nav-link\" id=\"nav-mqtt-tab\" data-toggle=\"tab\" href=\"#nav-mqtt\" role=\"tab\" aria-controls=\"nav-mqtt\" aria-selected=\"false\"><i class=\"fas fa-network-wired\"></i> MQTT</a>";
+const char ftpTab[] PROGMEM = "<a class=\"nav-item nav-link\" id=\"nav-ftp-tab\" data-toggle=\"tab\" href=\"#nav-ftp\" role=\"tab\" aria-controls=\"nav-ftp\" aria-selected=\"false\"><i class=\"fas fa-folder\"></i> FTP</a>";
 
 // Used for substitution of some variables/templates of html-files. Is called by webserver's template-engine
 String templateProcessor(const String& templ) {
@@ -3336,6 +3411,12 @@ String templateProcessor(const String& templ) {
         return String(ftpUserLength-1);
     } else if (templ == "FTP_PWD_LENGTH") {
         return String(ftpPasswordLength-1);
+    } else if (templ == "SHOW_FTP_TAB") {         // Only show FTP-tab if FTP-support was compiled
+        #ifdef FTP_ENABLE
+            return (String) FPSTR(ftpTab);
+        #else
+            return String();
+        #endif
     } else if (templ == "INIT_LED_BRIGHTNESS") {
         return String(prefsSettings.getUChar("iLedBrightness", 0));
     } else if (templ == "NIGHT_LED_BRIGHTNESS") {
@@ -3358,6 +3439,12 @@ String templateProcessor(const String& templ) {
         return String(prefsSettings.getUInt("vCheckIntv", voltageCheckInterval));
     } else if (templ == "MQTT_SERVER") {
         return prefsSettings.getString("mqttServer", "-1");
+    } else if (templ == "SHOW_MQTT_TAB") {        // Only show MQTT-tab if MQTT-support was compiled
+        #ifdef MQTT_ENABLE
+            return (String) FPSTR(mqttTab);
+        #else
+            return String();
+        #endif
     } else if (templ == "MQTT_ENABLE") {
         if (enableMqtt) {
             return String("checked=\"checked\"");
@@ -3854,14 +3941,14 @@ void webserverStart(void) {
         return true;
     }
 
-// Conversion routine 
+// Conversion routine
 void convertAsciiToUtf8(String asciiString, char *utf8String) {
 
     int k=0;
-    
+
     for (int i=0; i<asciiString.length() && k<MAX_FILEPATH_LENTGH-2; i++)
     {
-        
+
         switch (asciiString[i]) {
             case 0x8e: utf8String[k++]=0xc3; utf8String[k++]=0x84;  break; // Ä
             case 0x84: utf8String[k++]=0xc3; utf8String[k++]=0xa4;  break; // ä
@@ -3870,7 +3957,7 @@ void convertAsciiToUtf8(String asciiString, char *utf8String) {
             case 0x99: utf8String[k++]=0xc3; utf8String[k++]=0x96;  break; // Ö
             case 0x94: utf8String[k++]=0xc3; utf8String[k++]=0xb6;  break; // ö
             case 0xe1: utf8String[k++]=0xc3; utf8String[k++]=0x9f;  break; // ß
-            default: utf8String[k++]=asciiString[i];   
+            default: utf8String[k++]=asciiString[i];
         }
     }
 
@@ -3882,7 +3969,7 @@ void convertUtf8ToAscii(String utf8String, char *asciiString) {
 
   int k=0;
   bool f_C3_seen = false;
-  
+
   for (int i=0; i<utf8String.length() && k<MAX_FILEPATH_LENTGH-1; i++)
   {
 
@@ -3900,7 +3987,7 @@ void convertUtf8ToAscii(String utf8String, char *asciiString) {
           case 0x96: asciiString[k++]=0x99;  break; // Ö
           case 0xb6: asciiString[k++]=0x94;  break; // ö
           case 0x9f: asciiString[k++]=0xe1;  break; // ß
-          default: asciiString[k++]=0xdb;  // Unknow... 
+          default: asciiString[k++]=0xdb;  // Unknow...
         }
       } else {
         asciiString[k++]=utf8String[i];
@@ -4380,7 +4467,7 @@ void setup() {
         #endif
     #else
         #ifdef SD_MMC_1BIT_MODE
-            //pinMode(2, INPUT_PULLUP);
+            pinMode(2, INPUT_PULLUP);
             while (!SD_MMC.begin("/sdcard", true)) {
         #else
             while (!SD.begin(SPISD_CS)) {
@@ -4409,6 +4496,7 @@ void setup() {
             //digitalWrite(RFID_CS, HIGH);
             mfrc522 = new MFRC522(RFID_CS, RST_PIN);
             mfrc522->PCD_Init(RFID_CS, RST_PIN);
+            mfrc522->PCD_SetAntennaGain(rfidGain);
             delay(50);
             loggerNl(serialDebug, (char *) FPSTR(rfidScannerReady), LOGLEVEL_DEBUG);
         }
@@ -4422,11 +4510,12 @@ void setup() {
    Serial.println(F(" | |___   ___) | |  __/  | |_| | | | | | | | | (_) |"));
    Serial.println(F(" |_____| |____/  |_|      \\__,_| |_| |_| |_|  \\___/ "));
    Serial.println(F(" Rfid-controlled musicplayer\n"));
-
+   // print wake-up reason
+   printWakeUpReason();
    //reset GPIOs after sleep as they now RTC IOs
-   rtc_gpio_deinit(gpio_num_t(PAUSEPLAY_BUTTON));
-   rtc_gpio_deinit(gpio_num_t(NEXT_BUTTON));
-   rtc_gpio_deinit(gpio_num_t(PREVIOUS_BUTTON));
+   //rtc_gpio_deinit(gpio_num_t(PAUSEPLAY_BUTTON));
+   //rtc_gpio_deinit(gpio_num_t(NEXT_BUTTON));
+   //rtc_gpio_deinit(gpio_num_t(PREVIOUS_BUTTON));
    
    #ifdef PN5180_ENABLE_LPCD
      // disable pin hold from deep sleep
@@ -4458,9 +4547,7 @@ void setup() {
         headphoneLastDetectionState = digitalRead(HP_DETECT);
     #endif
 
-    //Print the wakeup reason for ESP32
-    print_wakeup_reason();
-      
+     
     // Get some stuff from NVS...
     // Get initial LED-brightness from NVS
 
@@ -4702,23 +4789,34 @@ void setup() {
     timerAlarmEnable(timer);
 
     #ifdef BLUETOOTH_ENABLE
-        if (operating_mode == BT_MODE) {
-            
-            i2s_pin_config_t pin_config = {
-                .bck_io_num = I2S_BCLK,
-                .ws_io_num = I2S_LRC,
-                .data_out_num = I2S_DOUT,
-                .data_in_num = I2S_PIN_NO_CHANGE
-            };
-
-            a2dp_sink.set_pin_config(pin_config);
-            a2dp_sink.start("ESPuino");
-
-            #ifdef NEOPIXEL_ENABLE
-                showLedBT = true;
-            #endif
-            
-        }        
+    if(operationMode == BT_MODE) {
+        a2dp_sink = new BluetoothA2DPSink();
+        i2s_pin_config_t pin_config = {
+            .bck_io_num = I2S_BCLK,
+            .ws_io_num = I2S_LRC,
+            .data_out_num = I2S_DOUT,
+            .data_in_num = I2S_PIN_NO_CHANGE
+        };
+        a2dp_sink->set_pin_config(pin_config);
+        a2dp_sink->start((char *) FPSTR(nameBluetoothDevice));
+        #ifdef NEOPIXEL_ENABLE
+            showLedBT = true;
+        #endif
+    } else {
+        esp_bt_mem_release(ESP_BT_MODE_BTDM);
+    #endif
+        xTaskCreatePinnedToCore(
+            playAudio, /* Function to implement the task */
+            "mp3play", /* Name of the task */
+            11000,  /* Stack size in words */
+            NULL,  /* Task input parameter */
+            2 | portPRIVILEGE_BIT,  /* Priority of the task */
+            &mp3Play,  /* Task handle. */
+            1 /* Core where the task should run */
+        );
+        wifiManager();
+    #ifdef BLUETOOTH_ENABLE
+    }
     #endif
 
     // Create tasks
@@ -4731,18 +4829,6 @@ void setup() {
             1,  /* Priority of the task */
             &rfid,  /* Task handle. */
             0 /* Core where the task should run */
-        );
-    }
-
-    if (operating_mode == ESPUINO_MODE) {
-        xTaskCreatePinnedToCore(
-            playAudio, /* Function to implement the task */
-            "mp3play", /* Name of the task */
-            11000,  /* Stack size in words */
-            NULL,  /* Task input parameter */
-            2 | portPRIVILEGE_BIT,  /* Priority of the task */
-            &mp3Play,  /* Task handle. */
-            1 /* Core where the task should run */
         );
     }
 
@@ -4810,6 +4896,15 @@ void setup() {
     playAudioMenu((char *) FPSTR(welcome));
 }
 
+#ifdef BLUETOOTH_ENABLE
+void bluetoothHandler(void) {
+    esp_a2d_audio_state_t state = a2dp_sink->get_audio_state();
+    // Reset Sleep Timer when audio is playing
+    if(state == ESP_A2D_AUDIO_STATE_STARTED) {
+        lastTimeActiveTimestamp = millis();
+    }
+}
+#endif
 
 void loop() {
     if (operating_mode != BT_MODE) {
@@ -4817,13 +4912,9 @@ void loop() {
     }
 
     if (operating_mode == BT_MODE) {
-       lastTimeActiveTimestamp = millis(); //prevent sleep
+      bluetoothHandler();
     }
 
-	#ifdef FTP_ENABLE
-        ftpManager();
-    #endif
-    
     #ifdef HEADPHONE_ADJUST_ENABLE
         headphoneVolumeManager();
     #endif
@@ -4833,32 +4924,14 @@ void loop() {
     #ifdef USE_ENCODER
         volumeHandler(minVolume, maxVolume);
     #endif
-    buttonHandler();
-    doButtonActions();
+    if (operating_mode != BT_MODE) {
+        buttonHandler();
+        doButtonActions();
+        rfidPreferenceLookupHandler();
+    }
+
     sleepHandler();
     deepSleepManager();
-    rfidPreferenceLookupHandler();
-    if (wifiManager() == WL_CONNECTED) {
-        #ifdef MQTT_ENABLE
-            if (enableMqtt) {
-                reconnect();
-                MQTTclient.loop();
-                postHeartbeatViaMqtt();
-            }
-        #endif
-        #ifdef FTP_ENABLE
-            if (ftpEnableLastStatus && ftpEnableCurrentStatus) {
-                ftpSrv->handleFTP();
-            }
-        #endif
-    }
-    #ifdef FTP_ENABLE
-        if (ftpEnableLastStatus && ftpEnableCurrentStatus) {
-            if (ftpSrv->isConnected()) {
-                lastTimeActiveTimestamp = millis();     // Re-adjust timer while client is connected to avoid ESP falling asleep
-            }
-        }
-    #endif
 
     #ifdef PLAY_LAST_RFID_AFTER_REBOOT
         if (operating_mode != BT_MODE) {
@@ -4866,7 +4939,6 @@ void loop() {
         }
     #endif
 
-    ws.cleanupClients();
 }
 
 
@@ -4912,20 +4984,4 @@ void audio_icyurl(const char *info) {  //homepage
 void audio_lasthost(const char *info) {  //stream URL played
     snprintf(logBuf, serialLoglength, "lasthost    : %s", info);
     loggerNl(serialDebug, logBuf, LOGLEVEL_INFO);
-}
-
-void print_wakeup_reason(){
-  esp_sleep_wakeup_cause_t wakeup_reason;
- 
-  wakeup_reason = esp_sleep_get_wakeup_cause();
- 
-  switch(wakeup_reason)
-  {
-    case ESP_SLEEP_WAKEUP_EXT0 : Serial.println(F("Wakeup caused by external signal using RTC_IO")); break;
-    case ESP_SLEEP_WAKEUP_EXT1 : Serial.println(F("Wakeup caused by external signal using RTC_CNTL")); break;
-    case ESP_SLEEP_WAKEUP_TIMER : Serial.println(F("Wakeup caused by timer")); break;
-    case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println(F("Wakeup caused by touchpad")); break;
-    case ESP_SLEEP_WAKEUP_ULP : Serial.println(F("Wakeup caused by ULP program")); break;
-    default : Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); break;
-  }
 }

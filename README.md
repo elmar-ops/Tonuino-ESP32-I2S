@@ -1,14 +1,15 @@
 # ESPuino - rfid-based musiccontroller based on ESP32 with I2S-DAC-support
 
 ## NEWS
-* As the creator of ESPuino claims it's trademarkt right, my project has been renamed to ESPuino. I'm totally respecting this. So I instantly renamed everything and hopefully, I didn't forget any parts.
+* As the creator of TonUINO claims it's trademark right, my project has been renamed to ESPuino. I'm totally respecting this and have to admit that I've been not aware of that. However, I instantly renamed everything and hopefully I didn't forget any parts. Since my repository has moved, please make sure (at least if you're using git) to change the URL of your local repository. An explanation was kindly [written by user](https://github.com/biologist79/ESPuino/issues/81).
+* Please note: inline with the renaming of the project, MQTT-topics were changed as well as they've been including the old name. Please make sure to change your local MQTT-configuration as well. Sorry to [those](https://github.com/biologist79/ESPuino/issues/83) that spent time on this to point out.
 * EN: I've set up a primarily German-speaking community with much documentation. Also an international corner for non-German-speakers is available at https://forum.espuino.de. Github-Login can be used there but it's not necessary.
 * DE: Ich habe ein primär deutschsprachiges Forum aufgesetzt, welches ich mit reichlich Doku versehen habe. Würde mich freuen, euch dort zu sehen: https://forum.espuino.de. Ihr könnt euch dort mit eurem Github-Login einloggen, jedoch auch "normal" anmelden.
 ## Changelog
 Moved to [another location](changelog.md) as it became to prominent here. Only last three events are kept:
-* 18.01.2020: Added directive `PN5180_ENABLE_LPCD`: awake from deepsleep with PN5180 is now possible (but needs another GPIO)
-* 25.01.2020: Added directive `USE_LAST_VOLUME_AFTER_REBOOT`: Remembers volume used at last shutdown after reboot. This overwrites initial volume from GUI.
-* 28.01.2020: Removed cached RFID-filebrowser and replaced by realtime-browser
+* 01.02.2020: Introducing PCB: Lolin32 with SD_MMC + PN5180
+* 06.02.2020: German umlauts now supported. When uploading via FTP make sure to change charset to CP437.
+* 09.02.2020: Added support for bluetooth-sink (a2dp). Thanks @grch87 & @elmar-ops for providing this feature! Please note: wifi not available is now coloured green as blue make totally sense for bluetooth :-)
 ## Known bugs
 * Some webstreams don't run. Guess it's a combination of saturated connection-pool and lack of heap-memory. Works probably better if ESP32-WROVER (e.g. Lolin D32 pro) is used, as this chip has PSRAM. Advice: Don't enable modules (e.g. MQTT) if you don't need them as this could save memory (and trouble).
 * English translation for webgui is currently outdated. This will be fixed soon when i18n-support will be integrated.
@@ -215,7 +216,10 @@ When using a develboard with SD-card-reader already integrated (Lolin D32 Pro, s
 WiFi is mandatory for webgui, FTP and MQTT. However, WiFi can be temporarily or permanently disabled. There are two ways to do that:
 * Use a special modification-card that can be configured via webgui
 * Press previous-key (and keep it pressed) + press next-button in parallel shortly. Now release both.
-This toggles the current WiFi-status: if it's currently enabled, it will be disabled instantly and vice versa. Please note: this WiFi-status will remain until you change it again, which means, that ESPuino will remember this state after the next reboot. Having Wifi enabled is indicated in idle-mode (no playlist active) with four *white* slow rotating LEDs whereas disabled WiFi is represented by those ones coloured *blue*.
+This toggles the current WiFi-status: if it's currently enabled, it will be disabled instantly and vice versa. Please note: this WiFi-status will remain until you change it again, which means, that ESPuino will remember this state after the next reboot. Having Wifi enabled is indicated in idle-mode (no playlist active) with four *white* slow rotating LEDs whereas disabled WiFi is represented by those ones coloured *green*. Bluetooth-mode is indicated by *blue* LEDs.
+
+## Bluetooth
+ESPuino can be used as bluetooth-sink (a2dp). This mode can be enabled/disabled via a RFID-modification-card. Applying one will restart ESPuino immediately. Two modes are available which are toggled in between: "normal" and "bluetooth". Normal means: SD + WiFi are available whereas in mode "bluetooth" only bluetooth-support can be provided. If bluetooth is active, this is indicated by four slow rotating *blue* LEDs. Now you can stream to your ESPuino e.g. with your mobile device. Tested this with Android 8 and worked 100% flawless.
 ## After ESPuino is connected to your WiFi
 After bringing ESPuino part of your LAN/WiFi, the 'regular' webgui is available at the IP assigned by your router (or the configured hostname). Using this GUI, you can configure:
 * WiFi
@@ -280,12 +284,14 @@ There are special RFID-tags, that don't start music by themself but can modify t
 * playlist in loop-mode
 * track und playlist loop-mode can both be activated at the same time, but unless track-loop isn't deactivated, playlist-loop won't be effective
 * Toggle WiFi (enable/disable) => disabling WiFi while webstream is active will stop the webstream instantly!
+* Toggle Bluetooth (enable/disable) => restarts ESPuino immediately
 
 ### Neopixel-ring (optional)
 Indicates different things. Don't forget configuration of number of LEDs via #define NUM_LEDS
 * While booting: every second LED (rotating orange)
 * Unable to mount SD: LEDs flashing red (will remain forever unless SD-card is available or `SHUTDOWN_IF_SD_BOOT_FAILS` is active)
-* IDLE: four LEDs slow rotating (white if WiFi enabled; blue if WiFi disabled)
+* IDLE: four LEDs slow rotating (white if WiFi enabled; green if WiFi disabled)
+* BLUETOOTH: four LEDs slow rotating coloured blue
 * ERROR: all LEDs flashing red (1x) if an action was not accepted
 * OK: all LEDs flashing green (1x) if an action was accepted
 * BUSY: violet; four fast rotating LEDs when generating a playlist. Duration depends on the number of files in your playlist.
@@ -345,7 +351,7 @@ After having ESPuino running on your ESP32 in your local WiFi, the webinterface-
 * FTP needs to be activated after boot by pressing `PAUSE` + `NEXT`-buttons (in parallel) first! Neopixel flashes green (1x) if enabling was successful. It'll be disabled automatically after next reboot. Means: you have to enable it every time you need it (if reboot was in between). Sounds annoying and maybe it is, but's running this way in order to have more heap-memory available (for webstream) if FTP isn't running.
 * In order to avoid exposing uSD-card or disassembling ESPuino all the time for adding new music, it's possible to transfer music to the uSD-card using FTP.
 * Default-user and password are set to `esp32` / `esp32` but can be changed later via GUI.
-* Make sure to set the max. number of parallel connections to ONE in your FTP-client and the charset to ISO8859-1.
+* Make sure to set the max. number of parallel connections to ONE in your FTP-client and the charset to CP437. CP437 is important if you want to use german umlauts (öäüß).
 * Secured FTP is not available. So make sure to disable SSL/TLS.
 * Software: my recommendation is [Filezilla](https://filezilla-project.org/) as it's free and available for multiple platforms.
 * Don't expect a super fast data-transfer; it's around 185 kB/s (SPI-mode) and 310 kB/s (MMC-mode).
