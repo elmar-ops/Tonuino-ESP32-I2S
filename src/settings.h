@@ -28,15 +28,13 @@
 #define SHUTDOWN_IF_SD_BOOT_FAILS       // Will put ESP to deepsleep if boot fails due to SD. Really recommend this if there's in battery-mode no other way to restart ESP! Interval adjustable via deepsleepTimeAfterBootFails.
 //#define MEASURE_BATTERY_VOLTAGE         // Enables battery-measurement via GPIO (ADC) and voltage-divider
 //#define PLAY_LAST_RFID_AFTER_REBOOT   // When restarting ESPuino, the last RFID that was active before, is recalled and played
-#define USE_LAST_VOLUME_AFTER_REBOOT    // Remembers the volume used at last shutdown after reboot
+//#define USE_LAST_VOLUME_AFTER_REBOOT    // Remembers the volume used at last shutdown after reboot
 //#define USE_ENCODER                   // IF HW rotary encoder used
-#define HWPULLUP                        // 10K external resistor used for pullup
-
 #define BLUETOOTH_ENABLE                // If enabled and bluetooth-mode is active, you can stream to your ESPuino via bluetooth (a2dp-sink).
 
 //################## select SD card mode #############################
 #define SD_MMC_1BIT_MODE            // run SD card in SD-MMC 1Bit mode
-#define SINGLE_SPI_ENABLE         // If only one SPI-instance should be used instead of two (not yet working!) (Works on ESP32-A1S with RFID via I2C)
+//#define SINGLE_SPI_ENABLE         // If only one SPI-instance should be used instead of two (not yet working!) (Works on ESP32-A1S with RFID via I2C)
 
 //################## select RFID reader ##############################
 #define RFID_READER_TYPE_MFRC522_SPI    // use MFRC522 via SPI

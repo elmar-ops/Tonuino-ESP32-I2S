@@ -203,8 +203,6 @@ bool enableMqtt = true;
     uint32_t mqttLastRetryTimestamp = 0;
 #endif
 
-uint8_t operating_mode = ESPUINO_MODE;                  // Mode as BT has not enough mem in Tonuino Mode
-
 uint8_t const cardIdSize = 4;                           // RFID
 // Volume
 uint8_t maxVolume = 21;                                 // Current maximum volume that can be adjusted
@@ -319,7 +317,7 @@ TaskHandle_t fileStorageTaskHandle;
     static AC101 ac(i2cBusOne);
 #endif
 #ifdef RFID_READER_TYPE_MFRC522_SPI
-        MFRC522 *mfrc522;
+    static MFRC522 mfrc522(RFID_CS, RST_PIN);
 #endif
 #ifdef RFID_READER_TYPE_MFRC522_I2C
     static TwoWire i2cBusTwo = TwoWire(1);
@@ -446,7 +444,6 @@ bool writeWifiStatusToNVS(bool wifiStatus);
 void bluetoothHandler(void);
 uint8_t readOperationModeFromNVS(void);
 bool setOperationMode(uint8_t operationMode);
-
 void playAudioMenu(String filename);
 
 
@@ -579,9 +576,11 @@ void buttonHandler() {
                 if (!buttons[i].currentState) {
                     buttons[i].isPressed = true;
                     buttons[i].lastPressedTimestamp = currentTimestamp;
+                    doButtonActions();
                 } else {
                     buttons[i].isReleased = true;
                     buttons[i].lastReleasedTimestamp = currentTimestamp;
+                    doButtonActions();
                 }
             }
             buttons[i].lastState = buttons[i].currentState;
@@ -602,32 +601,14 @@ void doButtonActions(void) {
             wifiStatusToggledTimestamp = millis();
             buttons[0].isPressed = false;
             buttons[1].isPressed = false;
-            if (operating_mode == ESPUINO_MODE)
+            if (operationMode == OPMODE_NORMAL)
             {
-                if (prefsSettings.putUChar("operating_mode", BT_MODE)) {
-                    loggerNl(serialDebug, (char *) FPSTR("BT_MODE"), LOGLEVEL_DEBUG);
-                    delay(1000);
-                    ESP.restart();
-                }
+                setOperationMode(OPMODE_BLUETOOTH);
             }
             
-            if (operating_mode == BT_MODE)
+            if (operationMode == OPMODE_BLUETOOTH)
             {
-                if (prefsSettings.putUChar("operating_mode", WEBRADIO_MODE)) {
-                    loggerNl(serialDebug, (char *) FPSTR("WEBRADIO_MODE"), LOGLEVEL_DEBUG);
-                    delay(1000);
-                    ESP.restart();
-                }
-            }
-
-            if (operating_mode == WEBRADIO_MODE)
-            {
-                if (prefsSettings.putUChar("operating_mode", ESPUINO_MODE))
-                {
-                  loggerNl(serialDebug, (char *) FPSTR("ESPUINO_MODE"), LOGLEVEL_DEBUG);
-                  delay(1000);
-                  ESP.restart();
-                }
+                setOperationMode(OPMODE_NORMAL);
             }
         }
         return;
@@ -1683,7 +1664,7 @@ void playAudio(void *parameter) {
                         continue;
                     }
                     #ifdef NEOPIXEL_ENABLE
-                        //showPlaylistProgress = true;
+                        showPlaylistProgress = true;
                     #endif
                     if (playProperties.startAtFilePos > 0) {
                         audio.setFilePos(playProperties.startAtFilePos);
@@ -1744,12 +1725,12 @@ void rfidScanner(void *parameter) {
             lastRfidCheckTimestamp = millis();
             // Reset the loop if no new card is present on the sensor/reader. This saves the entire process when idle.
 
-            if (!mfrc522->PICC_IsNewCardPresent()) {
+            if (!mfrc522.PICC_IsNewCardPresent()) {
                 continue;
             }
 
             // Select one of the cards
-            if (!mfrc522->PICC_ReadCardSerial()) {
+            if (!mfrc522.PICC_ReadCardSerial()) {
                 continue;
             }
 
@@ -1769,7 +1750,7 @@ void rfidScanner(void *parameter) {
             uint8_t n = 0;
             logger(serialDebug, (char *) FPSTR(rfidTagDetected), LOGLEVEL_NOTICE);
             for (uint8_t i=0; i<cardIdSize; i++) {
-                cardId[i] = mfrc522->uid.uidByte[i];
+                cardId[i] = mfrc522.uid.uidByte[i];
 
                 snprintf(logBuf, serialLoglength, "%02x", cardId[i]);
                 logger(serialDebug, logBuf, LOGLEVEL_NOTICE);
@@ -1781,8 +1762,8 @@ void rfidScanner(void *parameter) {
                     logger(serialDebug, "\n", LOGLEVEL_NOTICE);
                 }
             }
-            xQueueSend(rfidCardQueue, &cardIdString, 0);
-            if (strcmp(cardIdString, prevCardIdString) == 0) {
+            //xQueueSend(rfidCardQueue, &cardIdString, 0);
+            /*if (strcmp(cardIdString, prevCardIdString) == 0) {
               Serial.println(F("Same Card ..."));
               if (playProperties.pausePlay)
               {
@@ -1794,19 +1775,21 @@ void rfidScanner(void *parameter) {
               prevCardIdString = (char *) malloc(cardIdSize*3 +1);
               strcpy ( prevCardIdString, cardIdString );
               xQueueSend(rfidCardQueue, &cardIdString, 0);
-            }
+            }*/
+
+            xQueueSend(rfidCardQueue, &cardIdString, 0);
 
             while(true){
                 esp_task_wdt_reset();
                 vTaskDelay(10);
                 control=0;
                 for(int i=0; i<3; i++){
-                    if(!mfrc522->PICC_IsNewCardPresent()){
-                        if(mfrc522->PICC_ReadCardSerial()){
+                    if(!mfrc522.PICC_IsNewCardPresent()){
+                        if(mfrc522.PICC_ReadCardSerial()){
                         //Serial.print('a');
                         control |= 0x16;
                         }
-                        if(mfrc522->PICC_ReadCardSerial()){
+                        if(mfrc522.PICC_ReadCardSerial()){
                         //Serial.print('b');
                         control |= 0x16;
                         }
@@ -1830,8 +1813,8 @@ void rfidScanner(void *parameter) {
               trackControlToQueueSender(PAUSEPLAY);
               Serial.println("...continue");
             }
-            mfrc522->PICC_HaltA();
-            mfrc522->PCD_StopCrypto1();
+            mfrc522.PICC_HaltA();
+            mfrc522.PCD_StopCrypto1();
         }
     }
     vTaskDelete(NULL);
@@ -2045,7 +2028,6 @@ void showLed(void *parameter) {
         }
 
         if (showLedError) {             // If error occured (e.g. RFID-modification not accepted)
-            Serial.println(F("showLedError"));
             showLedError = false;
             notificationShown = true;
             FastLED.clear();
@@ -2328,16 +2310,16 @@ void showLed(void *parameter) {
                             FastLED.clear();
                             for (uint8_t led = 0; led < numLedsToLight; led++) {
                                 if (lockControls) {
-                                    leds[ledAddress(led)] = CRGB::Black;
+                                    leds[ledAddress(led)] = CRGB::Red;
                                 } else if (!playProperties.pausePlay) { // Hue-rainbow
                                     leds[ledAddress(led)].setHue((uint8_t) (85 - ((double) 95 / NUM_LEDS) * led));
                                 }
                             }
                             if (playProperties.pausePlay) {
-                                leds[ledAddress(0)] = CRGB::Black;
-                                    leds[(ledAddress(NUM_LEDS/4)) % NUM_LEDS] = CRGB::Black;
-                                    leds[(ledAddress(NUM_LEDS/2)) % NUM_LEDS] = CRGB::Black;
-                                    leds[(ledAddress(NUM_LEDS/4*3)) % NUM_LEDS] = CRGB::Black;
+                                leds[ledAddress(0)] = CRGB::Orange;
+                                    leds[(ledAddress(NUM_LEDS/4)) % NUM_LEDS] = CRGB::Orange;
+                                    leds[(ledAddress(NUM_LEDS/2)) % NUM_LEDS] = CRGB::Orange;
+                                    leds[(ledAddress(NUM_LEDS/4*3)) % NUM_LEDS] = CRGB::Orange;
                                     break;
                             }
                         }
@@ -2358,8 +2340,8 @@ void showLed(void *parameter) {
                                 leds[ledAddress(ledPosWebstream)].setHue(webstreamColor);
                                 leds[(ledAddress(ledPosWebstream)+NUM_LEDS/2) % NUM_LEDS].setHue(webstreamColor++);
                             } else if (playProperties.pausePlay) {
-                                leds[ledAddress(ledPosWebstream)] = CRGB::Black;
-                                leds[(ledAddress(ledPosWebstream)+NUM_LEDS/2) % NUM_LEDS] = CRGB::Black;
+                                leds[ledAddress(ledPosWebstream)] = CRGB::Orange;
+                                leds[(ledAddress(ledPosWebstream)+NUM_LEDS/2) % NUM_LEDS] = CRGB::Orange;
                             }
                         }
                     }
@@ -2453,23 +2435,10 @@ void deepSleepManager(void) {
             /*SPI.end();
             spiSD.end();*/
         #endif
-        #ifdef BLUETOOTH_ENABLE
-            if (operating_mode == BT_MODE) {
-              esp_bluedroid_disable();
-              esp_bt_controller_disable();
-            }
-        #endif
-        esp_wifi_stop();
-
-        //max98357a should soft standby as no BLCK signal will be send
-
-        /*SPI.end();
-        spiSD.end();*/
         Serial.flush();
         // switch off power
         digitalWrite(POWER, LOW);
-        //esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
-        // only pin 32 - 39 are available in ext1!
+        delay(200);
         #ifdef PN5180_ENABLE_LPCD
             // prepare and go to low power card detection mode
             gotoLPCD();
@@ -3159,6 +3128,13 @@ void rfidPreferenceLookupHandler (void) {
                 #ifdef MQTT_ENABLE
                     publishMqtt((char *) FPSTR(topicRfidState), currentRfidTagId, false);
                 #endif
+
+                #ifdef BLUETOOTH_ENABLE
+                // if music rfid was read, go back to normal mode
+                if(operationMode == OPMODE_BLUETOOTH) {
+                    setOperationMode(OPMODE_NORMAL);
+                }
+                #endif
                 if (strcmp(currentRfidTagId, prevCardIdString) == 0) {
                     Serial.println(F("Same Card ..."));
                     if (playProperties.pausePlay)
@@ -3274,27 +3250,6 @@ bool setOperationMode(uint8_t newOperationMode) {
     }
     return true;
 }
-
-
-// Creates FTP-instance only when requested
-#ifdef FTP_ENABLE
-    void ftpManager(void) {
-        if (ftpEnableLastStatus && !ftpEnableCurrentStatus) {
-            snprintf(logBuf, serialLoglength, "%s: %u", (char *) FPSTR(freeHeapWithoutFtp), ESP.getFreeHeap());
-            loggerNl(serialDebug, logBuf, LOGLEVEL_DEBUG);
-            ftpEnableCurrentStatus = true;
-            ftpSrv = new FtpServer();
-            ftpSrv->begin(FSystem, ftpUser, ftpPassword);
-            snprintf(logBuf, serialLoglength, "%s: %u", (char *) FPSTR(freeHeapWithFtp), ESP.getFreeHeap());
-            loggerNl(serialDebug, logBuf, LOGLEVEL_DEBUG);
-            #if (LANGUAGE == 1)
-                Serial.println(F("FTP-Server gestartet"));
-            #else
-                Serial.println(F("FTP-server started"));
-            #endif
-        }
-    }
-#endif
 
 
 // Creates FTP-instance only when requested
@@ -4372,7 +4327,7 @@ void printWakeUpReason() {
 
 void setup() {
     Serial.begin(115200);
-    //esp_sleep_enable_ext0_wakeup((gpio_num_t) PREVIOUS_BUTTON, 0);
+    esp_sleep_enable_ext0_wakeup((gpio_num_t) PAUSEPLAY_BUTTON, 0);
     #ifdef PN5180_ENABLE_LPCD
         // disable pin hold from deep sleep (LPCD)
         gpio_deep_sleep_hold_dis();
@@ -4457,8 +4412,9 @@ void setup() {
     #ifndef SINGLE_SPI_ENABLE
         #ifdef SD_MMC_1BIT_MODE
             pinMode(2, INPUT_PULLUP);
-            while (!SD_MMC.begin("/sdcard", true)) {
+           while (!SD_MMC.begin("/sdcard", true)) {
         #else
+            Serial.println(F("1"));
             pinMode(SPISD_CS, OUTPUT);
             digitalWrite(SPISD_CS, HIGH);
             spiSD.begin(SPISD_SCK, SPISD_MISO, SPISD_MOSI, SPISD_CS);
@@ -4490,16 +4446,10 @@ void setup() {
     #endif
 
     #ifdef RFID_READER_TYPE_MFRC522_SPI
-        if (operating_mode != BT_MODE) {
-            SPI.begin(RFID_SCK,RFID_MISO,RFID_MOSI,RFID_CS);
-            //pinMode(RFID_CS, OUTPUT);
-            //digitalWrite(RFID_CS, HIGH);
-            mfrc522 = new MFRC522(RFID_CS, RST_PIN);
-            mfrc522->PCD_Init(RFID_CS, RST_PIN);
-            mfrc522->PCD_SetAntennaGain(rfidGain);
-            delay(50);
-            loggerNl(serialDebug, (char *) FPSTR(rfidScannerReady), LOGLEVEL_DEBUG);
-        }
+        mfrc522.PCD_Init();
+        mfrc522.PCD_SetAntennaGain(rfidGain);
+        delay(50);
+        loggerNl(serialDebug, (char *) FPSTR(rfidScannerReady), LOGLEVEL_DEBUG);
     #endif
 
    // welcome message
@@ -4512,11 +4462,6 @@ void setup() {
    Serial.println(F(" Rfid-controlled musicplayer\n"));
    // print wake-up reason
    printWakeUpReason();
-   //reset GPIOs after sleep as they now RTC IOs
-   //rtc_gpio_deinit(gpio_num_t(PAUSEPLAY_BUTTON));
-   //rtc_gpio_deinit(gpio_num_t(NEXT_BUTTON));
-   //rtc_gpio_deinit(gpio_num_t(PREVIOUS_BUTTON));
-   
    #ifdef PN5180_ENABLE_LPCD
      // disable pin hold from deep sleep
      gpio_deep_sleep_hold_dis();
@@ -4547,17 +4492,26 @@ void setup() {
         headphoneLastDetectionState = digitalRead(HP_DETECT);
     #endif
 
-     
-    // Get some stuff from NVS...
-    // Get initial LED-brightness from NVS
+    // Create queues
+    volumeQueue = xQueueCreate(1, sizeof(int));
+    if (volumeQueue == NULL) {
+        loggerNl(serialDebug, (char *) FPSTR(unableToCreateVolQ), LOGLEVEL_ERROR);
+    }
 
-     operating_mode = prefsSettings.getUChar("operating_mode", 0);
-     if (operating_mode) {
-        //snprintf(logBuf, serialLoglength, "%s: %d", (char *) FPSTR(initialModefromNvs), operating_mode);
-        //loggerNl(logBuf, LOGLEVEL_INFO);
-    } else {
-        prefsSettings.putUChar("operating_mode", ESPUINO_MODE);
-        //loggerNl((char *) FPSTR(wroteInitialModeToNvs), LOGLEVEL_ERROR);
+    rfidCardQueue = xQueueCreate(1, (cardIdSize + 1) * sizeof(char));
+    if (rfidCardQueue == NULL) {
+        loggerNl(serialDebug, (char *) FPSTR(unableToCreateRfidQ), LOGLEVEL_ERROR);
+    }
+
+    trackControlQueue = xQueueCreate(1, sizeof(uint8_t));
+    if (trackControlQueue == NULL) {
+        loggerNl(serialDebug, (char *) FPSTR(unableToCreateMgmtQ), LOGLEVEL_ERROR);
+    }
+
+    char **playlistArray;
+    trackQueue = xQueueCreate(1, sizeof(playlistArray));
+    if (trackQueue == NULL) {
+        loggerNl(serialDebug, (char *) FPSTR(unableToCreatePlayQ), LOGLEVEL_ERROR);
     }
 
     // Get some stuff from NVS...
@@ -4759,28 +4713,6 @@ void setup() {
         }
     #endif
 
-    // Create queues
-    volumeQueue = xQueueCreate(1, sizeof(int));
-    if (volumeQueue == NULL) {
-        loggerNl(serialDebug, (char *) FPSTR(unableToCreateVolQ), LOGLEVEL_ERROR);
-    }
-
-    rfidCardQueue = xQueueCreate(1, (cardIdSize + 1) * sizeof(char));
-    if (rfidCardQueue == NULL) {
-        loggerNl(serialDebug, (char *) FPSTR(unableToCreateRfidQ), LOGLEVEL_ERROR);
-    }
-
-    trackControlQueue = xQueueCreate(1, sizeof(uint8_t));
-    if (trackControlQueue == NULL) {
-        loggerNl(serialDebug, (char *) FPSTR(unableToCreateMgmtQ), LOGLEVEL_ERROR);
-    }
-
-    char **playlistArray;
-    trackQueue = xQueueCreate(1, sizeof(playlistArray));
-    if (trackQueue == NULL) {
-        loggerNl(serialDebug, (char *) FPSTR(unableToCreatePlayQ), LOGLEVEL_ERROR);
-    }
-
     // Create 1000Hz-HW-Timer (currently only used for buttons)
     timerSemaphore = xSemaphoreCreateBinary();
     timer = timerBegin(0, 240, true);           // Prescaler: CPU-clock in MHz
@@ -4788,8 +4720,43 @@ void setup() {
     timerAlarmWrite(timer, 1000, true);         // 1000 Hz
     timerAlarmEnable(timer);
 
+    // Create tasks
+    xTaskCreatePinnedToCore(
+        rfidScanner, /* Function to implement the task */
+        "rfidhandling", /* Name of the task */
+        2000,  /* Stack size in words */
+        NULL,  /* Task input parameter */
+        1,  /* Priority of the task */
+        &rfid,  /* Task handle. */
+        0 /* Core where the task should run */
+    );
+
+    // Activate internal pullups for all buttons
+    pinMode(DREHENCODER_BUTTON, INPUT_PULLUP);
+    pinMode(PAUSEPLAY_BUTTON, INPUT_PULLUP);
+    pinMode(NEXT_BUTTON, INPUT_PULLUP);
+    pinMode(PREVIOUS_BUTTON, INPUT_PULLUP);
+
+    #ifdef USE_ENCODER
+        // Init rotary encoder
+        encoder.attachHalfQuad(DREHENCODER_CLK, DREHENCODER_DT);
+        encoder.clearCount();
+        encoder.setCount(initVolume*2);         // Ganzes Raster ist immer +2, daher initiale Lautstärke mit 2 multiplizieren
+    #endif
+
+    // Only enable MQTT if requested
+    #ifdef MQTT_ENABLE
+        if (enableMqtt) {
+            MQTTclient.setServer(mqtt_server, 1883);
+            MQTTclient.setCallback(callback);
+        }
+    #endif
+
+    operationMode = readOperationModeFromNVS();
+    wifiEnabled = getWifiEnableStatusFromNVS();
+
     #ifdef BLUETOOTH_ENABLE
-    if(operationMode == BT_MODE) {
+    if(operationMode == OPMODE_BLUETOOTH) {
         a2dp_sink = new BluetoothA2DPSink();
         i2s_pin_config_t pin_config = {
             .bck_io_num = I2S_BCLK,
@@ -4799,9 +4766,6 @@ void setup() {
         };
         a2dp_sink->set_pin_config(pin_config);
         a2dp_sink->start((char *) FPSTR(nameBluetoothDevice));
-        #ifdef NEOPIXEL_ENABLE
-            showLedBT = true;
-        #endif
     } else {
         esp_bt_mem_release(ESP_BT_MODE_BTDM);
     #endif
@@ -4819,81 +4783,13 @@ void setup() {
     }
     #endif
 
-    // Create tasks
-    if (operating_mode != BT_MODE) {
-        xTaskCreatePinnedToCore(
-            rfidScanner, /* Function to implement the task */
-            "rfidhandling", /* Name of the task */
-            2000,  /* Stack size in words */
-            NULL,  /* Task input parameter */
-            1,  /* Priority of the task */
-            &rfid,  /* Task handle. */
-            0 /* Core where the task should run */
-        );
-    }
-
-    #ifdef HWPULLUP 
-        pinMode(PAUSEPLAY_BUTTON, INPUT);
-        pinMode(NEXT_BUTTON, INPUT);
-        pinMode(PREVIOUS_BUTTON, INPUT);
-        digitalWrite(PAUSEPLAY_BUTTON,LOW);
-        digitalWrite(NEXT_BUTTON,LOW);
-        digitalWrite(PREVIOUS_BUTTON,LOW);
-    #endif
-    #ifndef HWPULLUP 
-        // Activate internal pullups for all buttons
-        pinMode(PAUSEPLAY_BUTTON, INPUT_PULLUP);
-        pinMode(NEXT_BUTTON, INPUT_PULLUP);
-        pinMode(PREVIOUS_BUTTON, INPUT_PULLUP);
-    #endif
-
-    #ifdef USE_ENCODER
-        // Init rotary encoder
-        encoder.attachHalfQuad(DREHENCODER_CLK, DREHENCODER_DT);
-        encoder.clearCount();
-        encoder.setCount(initVolume*2);         // Ganzes Raster ist immer +2, daher initiale Lautstärke mit 2 multiplizieren
-        #ifndef HWPULLUP 
-          pinMode(DREHENCODER_BUTTON, INPUT_PULLUP);
-        #endif
-    #endif
-
-    // Only enable MQTT if requested
-    #ifdef MQTT_ENABLE
-        if (enableMqtt) {
-            MQTTclient.setServer(mqtt_server, 1883);
-            MQTTclient.setCallback(callback);
-        }
-    #endif
-
-    // set wakupmask for powersave over RTC GPIOs as ext1 wakupsource 
-    esp_sleep_enable_ext0_wakeup((gpio_num_t)PAUSEPLAY_BUTTON, 0);
-    
-    if (operating_mode != BT_MODE) {
-      wifiEnabled = getWifiEnableStatusFromNVS();
-      wifiManager();
-    }
-
     lastTimeActiveTimestamp = millis();     // initial set after boot
 
     bootComplete = true;
 
-    if (operating_mode != BT_MODE) {
-        Serial.print(F("\n****Before BLEDevice::deinit ESP.getFreeHeap() "));
-        Serial.printf("%u\n",ESP.getFreeHeap());
-        esp_bt_controller_deinit();
-        esp_bt_mem_release(ESP_BT_MODE_BTDM);
-        Serial.print(F("\n****After BLEDevice::deinit ESP.getFreeHeap() "));
-        Serial.printf("%u\n",ESP.getFreeHeap());
-    }
-
-    if (operating_mode == WEBRADIO_MODE) {
-        getWebRadioStations("rfidTags");
-    }
-
     snprintf(logBuf, serialLoglength, "%s: %u", (char *) FPSTR(freeHeapAfterSetup), ESP.getFreeHeap());
     loggerNl(serialDebug, logBuf, LOGLEVEL_DEBUG);
     Serial.printf("PSRAM: %u bytes\n", ESP.getPsramSize());
-    playAudioMenu((char *) FPSTR(welcome));
 }
 
 #ifdef BLUETOOTH_ENABLE
@@ -4907,13 +4803,45 @@ void bluetoothHandler(void) {
 #endif
 
 void loop() {
-    if (operating_mode != BT_MODE) {
-      webserverStart();
-    }
 
-    if (operating_mode == BT_MODE) {
-      bluetoothHandler();
+    #ifdef BLUETOOTH_ENABLE
+    if(operationMode == OPMODE_BLUETOOTH) {
+        bluetoothHandler();
+    } else {
+    #endif
+        webserverStart();
+        #ifdef FTP_ENABLE
+            ftpManager();
+        #endif
+        #ifdef USE_ENCODER
+          volumeHandler(minVolume, maxVolume);
+        #endif
+        if (wifiManager() == WL_CONNECTED) {
+            #ifdef MQTT_ENABLE
+                if (enableMqtt) {
+                    reconnect();
+                    MQTTclient.loop();
+                    postHeartbeatViaMqtt();
+                }
+            #endif
+            #ifdef FTP_ENABLE
+                if (ftpEnableLastStatus && ftpEnableCurrentStatus) {
+                    ftpSrv->handleFTP();
+                }
+            #endif
+        }
+        #ifdef FTP_ENABLE
+            if (ftpEnableLastStatus && ftpEnableCurrentStatus) {
+                if (ftpSrv->isConnected()) {
+                    lastTimeActiveTimestamp = millis();     // Re-adjust timer while client is connected to avoid ESP falling asleep
+                }
+            }
+        #endif
+        ws.cleanupClients();
+    #ifdef BLUETOOTH_ENABLE
     }
+    #endif
+
 
     #ifdef HEADPHONE_ADJUST_ENABLE
         headphoneVolumeManager();
@@ -4921,22 +4849,13 @@ void loop() {
     #ifdef MEASURE_BATTERY_VOLTAGE
         batteryVoltageTester();
     #endif
-    #ifdef USE_ENCODER
-        volumeHandler(minVolume, maxVolume);
-    #endif
-    if (operating_mode != BT_MODE) {
-        buttonHandler();
-        doButtonActions();
-        rfidPreferenceLookupHandler();
-    }
-
+    buttonHandler();
     sleepHandler();
     deepSleepManager();
+    rfidPreferenceLookupHandler();
 
     #ifdef PLAY_LAST_RFID_AFTER_REBOOT
-        if (operating_mode != BT_MODE) {
-          recoverLastRfidPlayed();
-        }
+        recoverLastRfidPlayed();
     #endif
 
 }

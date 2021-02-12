@@ -51,18 +51,18 @@
 #define I2S_BCLK                        27          // BCLK (I2S)
 #define I2S_LRC                         26          // LRC (I2S)
 
-#ifdef USE_ENCODER
-    // Rotary encoder
-    #define DREHENCODER_CLK                 99          // If you want to reverse encoder's direction, just switch GPIOs of CLK with DT (in software or hardware)
-    #define DREHENCODER_DT                  99          // Info: Lolin D32 / Lolin D32 pro 35 are using 35 for battery-voltage-monitoring!
-    #define DREHENCODER_BUTTON              99          // Button is used to switch Tonuino on and off
-#endif
+
+// Rotary encoder
+#define DREHENCODER_CLK                 99          // If you want to reverse encoder's direction, just switch GPIOs of CLK with DT (in software or hardware)
+#define DREHENCODER_DT                  99          // Info: Lolin D32 / Lolin D32 pro 35 are using 35 for battery-voltage-monitoring!
+
 
 // GPIOs (Control-buttons)
 
 #define PAUSEPLAY_BUTTON                34           // 34 needs external pullup!            
 #define NEXT_BUTTON                     36           // 36 needs external pullup!       
 #define PREVIOUS_BUTTON                 39           // 39 needs external pullup!       
+#define DREHENCODER_BUTTON              99          // Button is used to switch Tonuino on and off
 
 // (optional) Power-control
 #define POWER                           99          // GPIO used to drive transistor-circuit, that switches off peripheral devices while ESP32-deepsleep
