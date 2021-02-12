@@ -31,6 +31,7 @@
 //#define USE_LAST_VOLUME_AFTER_REBOOT    // Remembers the volume used at last shutdown after reboot
 //#define USE_ENCODER                   // IF HW rotary encoder used
 #define BLUETOOTH_ENABLE                // If enabled and bluetooth-mode is active, you can stream to your ESPuino via bluetooth (a2dp-sink).
+//#define NFC_PAUSE                       // Pause/Play by remove/adding NFC tag
 
 //################## select SD card mode #############################
 #define SD_MMC_1BIT_MODE            // run SD card in SD-MMC 1Bit mode

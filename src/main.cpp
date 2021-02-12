@@ -374,10 +374,12 @@ RingbufHandle_t explorerFileUploadRingBuffer;
 QueueHandle_t explorerFileUploadStatusQueue;
 
 std::vector<std::string> webradiostations {};
-//Card detection
+
+#ifdef NFC_PAUSE
 char *prevCardIdString = strndup((char*) "0", cardIdSize); 
 bool is_card_present = false;
 uint8_t control = 0x00;
+#endif
 
 // Prototypes
 void accessPointStart(const char *SSID, IPAddress ip, IPAddress netmask);
@@ -1405,7 +1407,9 @@ void playAudio(void *parameter) {
 
             if (playProperties.playlistFinished && trackCommand != 0) {
                 loggerNl(serialDebug, (char *) FPSTR(noPlaymodeChangeIfIdle), LOGLEVEL_NOTICE);
+                #ifdef NFC_PAUSE
                 *prevCardIdString = NULL; // reset prev card
+                #endif
                 trackCommand = 0;
                 #ifdef NEOPIXEL_ENABLE
                     showLedError = true;
@@ -1735,8 +1739,10 @@ void rfidScanner(void *parameter) {
             }
 
             //mfrc522.PICC_DumpToSerial(&(mfrc522.uid));
-            //mfrc522.PICC_HaltA();
-            //mfrc522.PCD_StopCrypto1();
+            #ifndef NFC_PAUSE
+            mfrc522.PICC_HaltA();
+            mfrc522.PCD_StopCrypto1();
+            #endif
 
             cardIdString = (char *) malloc(cardIdSize*3 +1);
             if (cardIdString == NULL) {
@@ -1762,23 +1768,11 @@ void rfidScanner(void *parameter) {
                     logger(serialDebug, "\n", LOGLEVEL_NOTICE);
                 }
             }
-            //xQueueSend(rfidCardQueue, &cardIdString, 0);
-            /*if (strcmp(cardIdString, prevCardIdString) == 0) {
-              Serial.println(F("Same Card ..."));
-              if (playProperties.pausePlay)
-              {
-                trackControlToQueueSender(PAUSEPLAY);
-                Serial.println(F("...continue"));
-              }
-            } else {
-              Serial.println(F("New Card ..."));
-              prevCardIdString = (char *) malloc(cardIdSize*3 +1);
-              strcpy ( prevCardIdString, cardIdString );
-              xQueueSend(rfidCardQueue, &cardIdString, 0);
-            }*/
+
 
             xQueueSend(rfidCardQueue, &cardIdString, 0);
 
+			#ifdef NFC_PAUSE
             while(true){
                 esp_task_wdt_reset();
                 vTaskDelay(10);
@@ -1815,8 +1809,11 @@ void rfidScanner(void *parameter) {
             }
             mfrc522.PICC_HaltA();
             mfrc522.PCD_StopCrypto1();
+            #endif
         }
     }
+    
+    
     vTaskDelete(NULL);
 }
 #endif
@@ -3135,6 +3132,7 @@ void rfidPreferenceLookupHandler (void) {
                     setOperationMode(OPMODE_NORMAL);
                 }
                 #endif
+                #ifdef NFC_PAUSE
                 if (strcmp(currentRfidTagId, prevCardIdString) == 0) {
                     Serial.println(F("Same Card ..."));
                     if (playProperties.pausePlay)
@@ -3148,6 +3146,10 @@ void rfidPreferenceLookupHandler (void) {
                     strcpy ( prevCardIdString, currentRfidTagId );
                     trackQueueDispatcher(_file, _lastPlayPos, _playMode, _trackLastPlayed);
                 }
+                #endif
+                #ifndef NFC_PAUSE
+                trackQueueDispatcher(_file, _lastPlayPos, _playMode, _trackLastPlayed);
+                #endif
             }
         }
     }
