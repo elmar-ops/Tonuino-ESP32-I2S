@@ -4413,7 +4413,10 @@ void setup() {
 
     #ifndef SINGLE_SPI_ENABLE
         #ifdef SD_MMC_1BIT_MODE
-            pinMode(2, INPUT_PULLUP);
+           pinMode(2, INPUT_PULLUP);
+           pinMode(12, INPUT_PULLUP);
+           pinMode(13, INPUT_PULLUP);
+           pinMode(15, INPUT_PULLUP);
            while (!SD_MMC.begin("/sdcard", true)) {
         #else
             Serial.println(F("1"));
