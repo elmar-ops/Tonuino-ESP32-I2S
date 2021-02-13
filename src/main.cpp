@@ -647,9 +647,8 @@ void doButtonActions(void) {
                         buttons[i].isPressed = false;
                         break;
 
-                    case 2:
-                        trackControlToQueueSender(PAUSEPLAY);
-                        buttons[i].isPressed = false;
+                    case 2:  // PAUSEPLAY_BUTTON longpress
+                        gotoSleep = true;
                         break;
 
                     case 3:
