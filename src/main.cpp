@@ -448,7 +448,6 @@ uint8_t readOperationModeFromNVS(void);
 bool setOperationMode(uint8_t operationMode);
 void playAudioMenu(String filename);
 
-
 /* Wrapper-function for serial-logging (with newline)
     _currentLogLevel: loglevel that's currently active
     _logBuffer: char* to log
@@ -3797,7 +3796,7 @@ void webserverStart(void) {
                         (buf.Entry[i].Ns == namespace_ID)) {           // otherwise just my namespace
                         if (isNumber(buf.Entry[i].Key)) {
                             String s = prefsRfid.getString((const char *)buf.Entry[i].Key);
-                            Serial.printf("%s%s\n", buf.Entry[i].Key, s.c_str());
+                            Serial.printf("Key: %s Value: %s\n", buf.Entry[i].Key, s.c_str());
                             webradiostations.push_back(s.c_str());
                         }
                     }
@@ -4794,6 +4793,8 @@ void setup() {
     snprintf(logBuf, serialLoglength, "%s: %u", (char *) FPSTR(freeHeapAfterSetup), ESP.getFreeHeap());
     loggerNl(serialDebug, logBuf, LOGLEVEL_DEBUG);
     Serial.printf("PSRAM: %u bytes\n", ESP.getPsramSize());
+
+    getWebRadioStations("rfidTags");
 }
 
 #ifdef BLUETOOTH_ENABLE
