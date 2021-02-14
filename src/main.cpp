@@ -3064,6 +3064,7 @@ void doRfidCardModifications(const uint32_t mod) {
                 break;
         #endif
         case ENABLE_FTP_SERVER:
+            #ifdef FTP_ENABLE
             if (wifiManager() == WL_CONNECTED && !ftpEnableLastStatus && !ftpEnableCurrentStatus) {
                 ftpEnableLastStatus = true;
                 #ifdef NEOPIXEL_ENABLE
@@ -3075,6 +3076,7 @@ void doRfidCardModifications(const uint32_t mod) {
                     loggerNl(serialDebug, (char *) FPSTR(unableToStartFtpServer), LOGLEVEL_ERROR);
                 #endif
             }
+            #endif
 
         break;
         default:
