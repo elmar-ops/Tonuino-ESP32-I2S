@@ -655,6 +655,7 @@ void doButtonActions(void) {
                         break;
 
                     case 2:  // PAUSEPLAY_BUTTON longpress
+                        trackControlToQueueSender(STOP);
                         gotoSleep = true;
                         break;
 
@@ -2018,7 +2019,7 @@ void showLed(void *parameter) {
         if (!buttons[3].currentState) {
             FastLED.clear();
             for (uint8_t led = 0; led < NUM_LEDS; led++) {
-                leds[ledAddress(led)] = CRGB::Red;
+                leds[ledAddress(led)] = CRGB::Black;
                 if (buttons[3].currentState) {
                     FastLED.show();
                     delay(5);
@@ -2036,7 +2037,7 @@ void showLed(void *parameter) {
             FastLED.clear();
 
             for (uint8_t led = 0; led < NUM_LEDS; led++) {
-                leds[ledAddress(led)] = CRGB::Red;
+                leds[ledAddress(led)] = CRGB::Black;
             }
             FastLED.show();
             vTaskDelay(portTICK_RATE_MS * 200);
@@ -2086,7 +2087,7 @@ void showLed(void *parameter) {
                     FastLED.clear();
 
                     for (uint8_t led = 0; led < NUM_LEDS; led++) {
-                        leds[ledAddress(led)] = CRGB::Red;
+                        leds[ledAddress(led)] = CRGB::Black;
                     }
                     FastLED.show();
                     vTaskDelay(portTICK_RATE_MS * 200);
@@ -2118,7 +2119,7 @@ void showLed(void *parameter) {
                         } else if (((float) numLedsToLight / NUM_LEDS) <= 0.6 && ((float) numLedsToLight / NUM_LEDS) >= 0.3) {
                             leds[ledAddress(led)] = CRGB::Orange;
                         } else {
-                            leds[ledAddress(led)] = CRGB::Red;
+                            leds[ledAddress(led)] = CRGB::Black;
                         }
                     FastLED.show();
                     vTaskDelay(portTICK_RATE_MS*20);
@@ -2313,13 +2314,13 @@ void showLed(void *parameter) {
                             FastLED.clear();
                             for (uint8_t led = 0; led < numLedsToLight; led++) {
                                 if (lockControls) {
-                                    leds[ledAddress(led)] = CRGB::Red;
+                                    leds[ledAddress(led)] = CRGB::Black;
                                 } else if (!playProperties.pausePlay) { // Hue-rainbow
                                     leds[ledAddress(led)].setHue((uint8_t) (85 - ((double) 95 / NUM_LEDS) * led));
                                 }
                             }
                             if (playProperties.pausePlay) {
-                                leds[ledAddress(0)] = CRGB::Orange;
+                                leds[ledAddress(0)] = CRGB::Black;
                                     leds[(ledAddress(NUM_LEDS/4)) % NUM_LEDS] = CRGB::Orange;
                                     leds[(ledAddress(NUM_LEDS/2)) % NUM_LEDS] = CRGB::Orange;
                                     leds[(ledAddress(NUM_LEDS/4*3)) % NUM_LEDS] = CRGB::Orange;
@@ -2337,14 +2338,14 @@ void showLed(void *parameter) {
                                 ledPosWebstream = 0;
                             }
                             if (lockControls) {
-                                leds[ledAddress(ledPosWebstream)] = CRGB::Red;
-                                leds[(ledAddress(ledPosWebstream)+NUM_LEDS/2) % NUM_LEDS] = CRGB::Red;
+                                leds[ledAddress(ledPosWebstream)] = CRGB::Black;
+                                leds[(ledAddress(ledPosWebstream)+NUM_LEDS/2) % NUM_LEDS] = CRGB::Black;
                             } else if (!playProperties.pausePlay) {
                                 leds[ledAddress(ledPosWebstream)].setHue(webstreamColor);
                                 leds[(ledAddress(ledPosWebstream)+NUM_LEDS/2) % NUM_LEDS].setHue(webstreamColor++);
                             } else if (playProperties.pausePlay) {
-                                leds[ledAddress(ledPosWebstream)] = CRGB::Orange;
-                                leds[(ledAddress(ledPosWebstream)+NUM_LEDS/2) % NUM_LEDS] = CRGB::Orange;
+                                leds[ledAddress(ledPosWebstream)] = CRGB::Black;
+                                leds[(ledAddress(ledPosWebstream)+NUM_LEDS/2) % NUM_LEDS] = CRGB::Black;
                             }
                         }
                     }
@@ -4759,7 +4760,9 @@ void setup() {
     );
 
     // Activate internal pullups for all buttons
+    #ifdef USE_ENCODER
     pinMode(DREHENCODER_BUTTON, INPUT_PULLUP);
+    #endif
     pinMode(PAUSEPLAY_BUTTON, INPUT_PULLUP);
     pinMode(NEXT_BUTTON, INPUT_PULLUP);
     pinMode(PREVIOUS_BUTTON, INPUT_PULLUP);
