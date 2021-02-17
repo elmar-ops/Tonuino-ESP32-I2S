@@ -148,6 +148,3 @@ float voltageIndicatorHigh = 4.2;                   // Upper range for Neopixel-
 
 //Operatingmodes
 
-#define ESPUINO_MODE                    1
-#define BT_MODE                         2
-#define WEBRADIO_MODE                   3
