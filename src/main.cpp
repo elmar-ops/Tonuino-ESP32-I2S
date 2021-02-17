@@ -14,7 +14,7 @@
     #include "settings-lolin_d32.h"                     // Contains all user-relevant settings for Wemos Lolin D32
 #elif (HAL == 4)
     #include "settings-lolin_d32_pro.h"                 // Contains all user-relevant settings for Wemos Lolin D32 pro
-#elif (HAL == 5)
+#elif (HAL == 99)
     #include "settings-custom.h"                        // Contains all user-relevant settings custom-board
 #endif
 
@@ -2402,7 +2402,7 @@ void gotoLPCD() {
     if (nfc.switchToLPCD(wakeupCounterInMs)) {
         Serial.println(F("switch to low power card detection: success"));
         // configure wakeup pin for deep-sleep wake-up, use ext1
-        esp_sleep_enable_ext1_wakeup(BUTTON_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+        esp_sleep_enable_ext1_wakeup((1ULL<<(RFID_IRQ)), ESP_EXT1_WAKEUP_ANY_HIGH);
         // freeze pin states in deep sleep
         gpio_hold_en(gpio_num_t(RFID_CS));  // CS/NSS
         gpio_hold_en(gpio_num_t(RFID_RST)); // RST
@@ -3066,20 +3066,20 @@ void doRfidCardModifications(const uint32_t mod) {
         #endif
         case ENABLE_FTP_SERVER:
             #ifdef FTP_ENABLE
-            if (wifiManager() == WL_CONNECTED && !ftpEnableLastStatus && !ftpEnableCurrentStatus) {
-                ftpEnableLastStatus = true;
-                #ifdef NEOPIXEL_ENABLE
-                    showLedOk = true;
-                #endif
-            } else {
-                #ifdef NEOPIXEL_ENABLE
-                    showLedError = true;
-                    loggerNl(serialDebug, (char *) FPSTR(unableToStartFtpServer), LOGLEVEL_ERROR);
-                #endif
-            }
+                if (wifiManager() == WL_CONNECTED && !ftpEnableLastStatus && !ftpEnableCurrentStatus) {
+                    ftpEnableLastStatus = true;
+                    #ifdef NEOPIXEL_ENABLE
+                        showLedOk = true;
+                    #endif
+                } else {
+                    #ifdef NEOPIXEL_ENABLE
+                        showLedError = true;
+                        loggerNl(serialDebug, (char *) FPSTR(unableToStartFtpServer), LOGLEVEL_ERROR);
+                    #endif
+                }
             #endif
 
-        break;
+            break;
         default:
             snprintf(logBuf, serialLoglength, "%s %d !", (char *) FPSTR(modificatorDoesNotExist), mod);
             loggerNl(serialDebug, logBuf, LOGLEVEL_ERROR);
@@ -4336,7 +4336,7 @@ void printWakeUpReason() {
             if (nfc14443.switchToLPCD(wakeupCounterInMs)) {
                 loggerNl(serialDebug, (char *) FPSTR(lowPowerCardSuccess), LOGLEVEL_INFO);
                 // configure wakeup pin for deep-sleep wake-up, use ext1
-                esp_sleep_enable_ext1_wakeup(BUTTON_PIN_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+                esp_sleep_enable_ext1_wakeup((1ULL<<(RFID_IRQ)), ESP_EXT1_WAKEUP_ANY_HIGH);
                 // freeze pin states in deep sleep
                 gpio_hold_en(gpio_num_t(RFID_CS));  // CS/NSS
                 gpio_hold_en(gpio_num_t(RFID_RST)); // RST
