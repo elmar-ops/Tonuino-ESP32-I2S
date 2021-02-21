@@ -2179,7 +2179,7 @@ void showLed(void *parameter) {
                 uint8_t numLedsToLight = map(playProperties.currentTrackNumber, 0, playProperties.numberOfTracks-1, 0, NUM_LEDS);
                 FastLED.clear();
                 for (uint8_t i=0; i < numLedsToLight; i++) {
-                    leds[ledAddress(i)] = CRGB::Blue;
+                    leds[ledAddress(i)] = CRGB::Black;
                     FastLED.show();
                     #ifdef MEASURE_BATTERY_VOLTAGE
                         if (hlastVolume != currentVolume || lastLedBrightness != ledBrightness || showLedError || showLedOk || showVoltageWarning || showLedVoltage || !buttons[3].currentState) {
@@ -2317,14 +2317,14 @@ void showLed(void *parameter) {
                                 if (lockControls) {
                                     leds[ledAddress(led)] = CRGB::Black;
                                 } else if (!playProperties.pausePlay) { // Hue-rainbow
-                                    leds[ledAddress(led)].setHue((uint8_t) (85 - ((double) 95 / NUM_LEDS) * led));
+                                    //leds[ledAddress(led)].setHue((uint8_t) (85 - ((double) 95 / NUM_LEDS) * led));
                                 }
                             }
                             if (playProperties.pausePlay) {
                                 leds[ledAddress(0)] = CRGB::Black;
-                                    leds[(ledAddress(NUM_LEDS/4)) % NUM_LEDS] = CRGB::Orange;
-                                    leds[(ledAddress(NUM_LEDS/2)) % NUM_LEDS] = CRGB::Orange;
-                                    leds[(ledAddress(NUM_LEDS/4*3)) % NUM_LEDS] = CRGB::Orange;
+                                    leds[(ledAddress(NUM_LEDS/4)) % NUM_LEDS] = CRGB::Black;
+                                    leds[(ledAddress(NUM_LEDS/2)) % NUM_LEDS] = CRGB::Black;
+                                    leds[(ledAddress(NUM_LEDS/4*3)) % NUM_LEDS] = CRGB::Black;
                                     break;
                             }
                         }
@@ -2342,8 +2342,9 @@ void showLed(void *parameter) {
                                 leds[ledAddress(ledPosWebstream)] = CRGB::Black;
                                 leds[(ledAddress(ledPosWebstream)+NUM_LEDS/2) % NUM_LEDS] = CRGB::Black;
                             } else if (!playProperties.pausePlay) {
-                                leds[ledAddress(ledPosWebstream)].setHue(webstreamColor);
-                                leds[(ledAddress(ledPosWebstream)+NUM_LEDS/2) % NUM_LEDS].setHue(webstreamColor++);
+                                //leds[ledAddress(ledPosWebstream)].setHue(webstreamColor);
+                                //leds[(ledAddress(ledPosWebstream)+NUM_LEDS/2) % NUM_LEDS].setHue(webstreamColor++);
+                                leds[ledAddress(0)] = CRGB::Green;
                             } else if (playProperties.pausePlay) {
                                 leds[ledAddress(ledPosWebstream)] = CRGB::Black;
                                 leds[(ledAddress(ledPosWebstream)+NUM_LEDS/2) % NUM_LEDS] = CRGB::Black;
