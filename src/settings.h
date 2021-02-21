@@ -13,7 +13,7 @@
    99: custom                   => settings-custom.h
    more to come...
 */
- #define HAL 5                // HAL 1 = LoLin32, 2 = ESP32-A1S-AudioKit, 3 = Lolin D32, 4 = Lolin D32 pro
+ #define HAL 99                // HAL 1 = LoLin32, 2 = ESP32-A1S-AudioKit, 3 = Lolin D32, 4 = Lolin D32 pro
 
 
 //########################## MODULES #################################

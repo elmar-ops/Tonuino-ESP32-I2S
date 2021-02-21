@@ -672,8 +672,9 @@ void doButtonActions(void) {
                         #endif
                         #ifndef USE_ENCODER
                             if (currentVolume < maxVolume) {
-                            currentVolume++;
-                            volumeToQueueSender(currentVolume);
+								currentVolume++;
+								lastVolume = currentVolume;
+								volumeToQueueSender(currentVolume);
                             }
                             buttons[i].isPressed = false;
                             break;
@@ -685,9 +686,9 @@ void doButtonActions(void) {
                         #endif
                         #ifndef USE_ENCODER
                             if (currentVolume > 0) {
-                            currentVolume--;
-                            volumeToQueueSender(currentVolume);
-                            
+								currentVolume--;
+								lastVolume = currentVolume;
+								volumeToQueueSender(currentVolume);
                             }
                             buttons[i].isPressed = false;
                             break;
@@ -4426,7 +4427,7 @@ void setup() {
 #endif
 
     #ifdef RFID_READER_TYPE_MFRC522_SPI
-        #if (HAL == 4 || HAL == 5)
+        #if (HAL == 4 || HAL == 99)
             SPI.begin(RFID_SCK, RFID_MISO, RFID_MOSI, RFID_CS);     // ToDo: Not sure if this should be the default-case
         #else
             SPI.begin();
@@ -4616,6 +4617,8 @@ void setup() {
             initVolume = nvsInitialVolume;
             snprintf(logBuf, serialLoglength, "%s: %u", (char *) FPSTR(restoredInitialLoudnessFromNvs), nvsInitialVolume);
             loggerNl(serialDebug, logBuf, LOGLEVEL_INFO);
+			currentVolume = initVolume;
+			volumeToQueueSender(currentVolume);
         } else {
             prefsSettings.putUInt("initVolume", initVolume);
             loggerNl(serialDebug, (char *) FPSTR(wroteInitialLoudnessToNvs), LOGLEVEL_ERROR);
