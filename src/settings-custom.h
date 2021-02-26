@@ -44,18 +44,23 @@
 #define I2S_BCLK                        27          // BCLK (I2S)
 #define I2S_LRC                         26          // LRC (I2S)
 
-#ifdef USE_ENCODER
-    // Rotary encoder
-    #define DREHENCODER_CLK                 99          // If you want to reverse encoder's direction, just switch GPIOs of CLK with DT (in software or hardware)
-    #define DREHENCODER_DT                  99          // Info: Lolin D32 / Lolin D32 pro 35 are using 35 for battery-voltage-monitoring!
-    #define DREHENCODER_BUTTON              99          // Button is used to switch Tonuino on and off
+// Rotary encoder
+#ifdef USEROTARY_ENABLE
+    #define DREHENCODER_CLK             34          // If you want to reverse encoder's direction, just switch GPIOs of CLK with DT (in software or hardware)
+    #define DREHENCODER_DT              35          // Info: Lolin D32 / Lolin D32 pro 35 are using 35 for battery-voltage-monitoring!
+    #define DREHENCODER_BUTTON          32          // Button 3: is used to switch ESPuino on and off
 #endif
 
-// GPIOs (Control-buttons)
+// Control-buttons (set to 99 to disable)
+#define NEXT_BUTTON                      36          // Button 0: GPIO to detect next
+#define PREVIOUS_BUTTON                  39          // Button 1: GPIO to detect previous (Important: as of 19.11.2020 changed from 33 to 2; make sure to change in SD-MMC-mode)
+#define PAUSEPLAY_BUTTON                 34          // Button 2: GPIO to detect pause/play
+#define BUTTON_4                        99          // Button 4: unnamed optional button
+#define BUTTON_5                        99          // Button 5: unnamed optional button
 
-#define PAUSEPLAY_BUTTON                34           // 34 needs external pullup!            
-#define NEXT_BUTTON                     36           // 36 needs external pullup!       
-#define PREVIOUS_BUTTON                 39           // 39 needs external pullup!       
+// Wake-up button
+// Please note: only RTC-GPIOs (0, 4, 12, 13, 14, 15, 25, 26, 27, 32, 33, 34, 35, 36, 39, 99) can be used! Set to 99 to disable.
+#define WAKEUP_BUTTON                   PAUSEPLAY_BUTTON // Defines the button that is used to wake up ESPuino from deepsleep.
 
 // (optional) Power-control
 #define POWER                           99          // GPIO used to drive transistor-circuit, that switches off peripheral devices while ESP32-deepsleep
