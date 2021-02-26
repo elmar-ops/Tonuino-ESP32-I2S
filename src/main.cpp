@@ -5001,7 +5001,7 @@ void setup() {
     loggerNl(serialDebug, logBuf, LOGLEVEL_DEBUG);
     Serial.printf("PSRAM: %u bytes\n", ESP.getPsramSize());
 
-    getWebRadioStations("rfidTags");
+    //getWebRadioStations("rfidTags");
 }
 
 #ifdef BLUETOOTH_ENABLE
