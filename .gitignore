@@ -12,3 +12,4 @@ cmake-build-az-delivery-devkit-v4/
 cmake-build-debug/
 *.bak
 *.zip
+.vscode
