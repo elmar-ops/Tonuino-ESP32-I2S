@@ -37,7 +37,7 @@
     //#define MEASURE_BATTERY_VOLTAGE         // Enables battery-measurement via GPIO (ADC) and voltage-divider
     //#define PLAY_LAST_RFID_AFTER_REBOOT   // When restarting ESPuino, the last RFID that was active before, is recalled and played
     //#define USE_LAST_VOLUME_AFTER_REBOOT  // Remembers the volume used at last shutdown after reboot
-    #define USEROTARY_ENABLE                // If rotary-encoder is used (don't forget to review WAKEUP_BUTTON if you disable this feature!)
+    //#define USEROTARY_ENABLE                // If rotary-encoder is used (don't forget to review WAKEUP_BUTTON if you disable this feature!)
     #define BLUETOOTH_ENABLE                // If enabled and bluetooth-mode is active, you can stream to your ESPuino via bluetooth (a2dp-sink).
     //#define IR_CONTROL_ENABLE             // Enables remote control
 	#define NFC_PAUSE                       // Pause/Play by remove/adding NFC tag
@@ -68,7 +68,7 @@
 
     //############# Port-expander-configuration ######################
     #ifdef PORT_EXPANDER_ENABLE
-        const uint8_t portsToRead = 2;      // PCA9555 has two ports à 8 channels. If 8 channels are sufficient, set to 1 and only use the first port!
+        const uint8_t portsToRead = 2;      // PCA9555 has two ports ï¿½ 8 channels. If 8 channels are sufficient, set to 1 and only use the first port!
         uint8_t expanderI2cAddress = 0x20;  // I2C-address of PCA9555
     #endif
 

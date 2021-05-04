@@ -26,6 +26,7 @@
         #define SPISD_MISO                  2          // GPIO for master in slave ou (SD) => not necessary for single-SPI
         #define SPISD_SCK                   14          // GPIO for clock-signal (SD) => not necessary for single-SPI
     #endif
+#endif
 
 // RFID (via SPI)
 #define RST_PIN                         22          // Used for hard power-down (RST connected to GND) LED GREEN

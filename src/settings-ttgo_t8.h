@@ -18,29 +18,29 @@
     //
     // SD_MMC uses fixed pins
     //  MOSI    15
-    //  SCK     14
-    //  MISO    2
+    //  SCKK    14
+    //  MISO    2   // hardware pullup may required
 #else
-    // uSD-card-reader (via SPI) => don't use... won't work!
-    #define SPISD_CS                    15          // GPIO for chip select (SD)
+    // uSD-card-reader (if SPI is used; these GPIOs can be changed)
+    #define SPISD_CS                        13          // GPIO for chip select (SD)
     #ifndef SINGLE_SPI_ENABLE
-        #define SPISD_MOSI              13          // GPIO for master out slave in (SD) => not necessary for single-SPI
-        #define SPISD_MISO              16          // GPIO for master in slave ou (SD) => not necessary for single-SPI
-        #define SPISD_SCK               14          // GPIO for clock-signal (SD) => not necessary for single-SPI
+        #define SPISD_MOSI                  15          // GPIO for master out slave in (SD) => not necessary for single-SPI
+        #define SPISD_MISO                  2          // GPIO for master in slave ou (SD) => not necessary for single-SPI
+        #define SPISD_SCK                   14          // GPIO for clock-signal (SD) => not necessary for single-SPI
     #endif
 #endif
 
 // RFID (via SPI)
-#define RST_PIN                         99          // Not necessary but has to be set anyway; so let's use a dummy-number
+#define RST_PIN                         22          // Not necessary but has to be set anyway; so let's use a dummy-number
 #define RFID_CS                         21          // GPIO for chip select (RFID)
 #define RFID_MOSI                       23          // GPIO for master out slave in (RFID)
 #define RFID_MISO                       19          // GPIO for master in slave out (RFID)
 #define RFID_SCK                        18          // GPIO for clock-signal (RFID)
 
 #ifdef RFID_READER_TYPE_PN5180
-    #define RFID_BUSY                   5           // PN5180 BUSY PIN
+    #define RFID_BUSY                   99          // PN5180 BUSY PIN
     #define RFID_RST                    22          // PN5180 RESET PIN
-    #define RFID_IRQ                    13          // PN5180 IRQ PIN (only needed for low power card detection)
+    #define RFID_IRQ                    39          // PN5180 IRQ PIN (only needed for low power card detection)
 #endif
 // I2S (DAC)
 #define I2S_DOUT                        25          // Digital out (I2S)
@@ -55,9 +55,9 @@
 #endif
 
 // Control-buttons (set to 99 to DISABLE; 0->39 for GPIO; 100->115 for port-expander)
-#define NEXT_BUTTON                      0          // Button 0: GPIO to detect next
-#define PREVIOUS_BUTTON                 36          // Button 1: GPIO to detect previous (Important: as of 19.11.2020 changed from 33 to 2; make sure to change in SD-MMC-mode)
-#define PAUSEPLAY_BUTTON                39          // Button 2: GPIO to detect pause/play
+#define NEXT_BUTTON                     36          // Button 0: GPIO to detect next
+#define PREVIOUS_BUTTON                 39          // Button 1: GPIO to detect previous (Important: as of 19.11.2020 changed from 33 to 2; make sure to change in SD-MMC-mode)
+#define PAUSEPLAY_BUTTON                34          // Button 2: GPIO to detect pause/play
 #define BUTTON_4                        99          // Button 4: unnamed optional button
 #define BUTTON_5                        99          // Button 5: unnamed optional button
 
@@ -70,30 +70,30 @@
 // Wake-up button => this also is the interrupt-pin if port-expander is enabled!
 // Please note: only RTC-GPIOs (0, 4, 12, 13, 14, 15, 25, 26, 27, 32, 33, 34, 35, 36, 39, 99) can be used! Set to 99 to DISABLE.
 // Please note #2: this button can be used as interrupt-pin for port-expander. If so, all pins connected to port-expander can wake up ESPuino.
-#define WAKEUP_BUTTON                   DREHENCODER_BUTTON // Defines the button that is used to wake up ESPuino from deepsleep.
+#define WAKEUP_BUTTON                   PAUSEPLAY_BUTTON // Defines the button that is used to wake up ESPuino from deepsleep.
 
 // (optional) Power-control
-#define POWER                            4          // GPIO used to drive transistor-circuit, that switches off peripheral devices while ESP32-deepsleep
+#define POWER                            99          // GPIO used to drive transistor-circuit, that switches off peripheral devices while ESP32-deepsleep
 
 // (optional) Neopixel
 #define LED_PIN                         12          // GPIO for Neopixel-signaling
 
 // (optinal) Headphone-detection
 #ifdef HEADPHONE_ADJUST_ENABLE
-    #define HP_DETECT                   13          // GPIO that detects, if there's a plug in the headphone jack or not
+    #define HP_DETECT                   22          // GPIO that detects, if there's a plug in the headphone jack or not
 #endif
 
 // (optional) Monitoring of battery-voltage via ADC
 #ifdef MEASURE_BATTERY_VOLTAGE
-    #define VOLTAGE_READ_PIN            35          // GPIO used to monitor battery-voltage. Change to 35 if you're using Lolin D32 or Lolin D32 pro as it's hard-wired there!
+    #define VOLTAGE_READ_PIN            33          // GPIO used to monitor battery-voltage. Change to 35 if you're using Lolin D32 or Lolin D32 pro as it's hard-wired there!
     float referenceVoltage = 3.35;                  // Voltage between 3.3V and GND-pin at the develboard in battery-mode (disconnect USB!)
     float offsetVoltage = 0.1;                      // If voltage measured by ESP isn't 100% accurate, you can add an correction-value here
 #endif
 
 // (optional) For measuring battery-voltage a voltage-divider is necessary. Their values need to be configured here.
 #ifdef MEASURE_BATTERY_VOLTAGE
-    uint8_t rdiv1 = 100;                               // Rdiv1 of voltage-divider (kOhms) (measure exact value with multimeter!)
-    uint16_t rdiv2 = 100;                              // Rdiv2 of voltage-divider (kOhms) (measure exact value with multimeter!) => used to measure voltage via ADC!
+    uint8_t rdiv1 = 129;                               // Rdiv1 of voltage-divider (kOhms) (measure exact value with multimeter!)
+    uint16_t rdiv2 = 129;                              // Rdiv2 of voltage-divider (kOhms) (measure exact value with multimeter!) => used to measure voltage via ADC!
 #endif
 
 // (Optional) remote control via infrared
